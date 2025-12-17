@@ -1,0 +1,31 @@
+# Flutter/Dart build outputs
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.fvm/
+.idea/
+.vscode/
+build/
+coverage/
+pubspec.lock
+
+# Platform builds
+ios/Pods/
+android/.gradle/
+android/app/build/
+linux/build/
+macos/Flutter/ephemeral/
+windows/Runner/GeneratedPluginRegistrant.*
+windows/flutter/ephemeral/
+
+# Generated files
+*.iml
+*.lock
+*.log
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

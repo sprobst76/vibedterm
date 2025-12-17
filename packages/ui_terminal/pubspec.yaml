@@ -1,0 +1,17 @@
+name: ui_terminal
+description: Terminal widget integration for VibedTerm.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^3.0.1
+  flutter_test:
+    sdk: flutter

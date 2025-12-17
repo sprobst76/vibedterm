@@ -1,0 +1,12 @@
+name: vibedterm
+packages:
+  - packages/**
+  - apps/**
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+scripts:
+  analyze: melos exec -- flutter analyze
+  test: melos exec -- flutter test

@@ -1,0 +1,4 @@
+# melos_managed_dependency_overrides: core_vault
+dependency_overrides:
+  core_vault:
+    path: ../../packages/core_vault
