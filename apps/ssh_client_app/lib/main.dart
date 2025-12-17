@@ -1079,6 +1079,11 @@ class _TerminalPanelState extends State<TerminalPanel> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                OutlinedButton.icon(
+                  onPressed: shellActive ? _clearTerminal : null,
+                  icon: const Icon(Icons.clear_all),
+                  label: const Text('Clear'),
+                ),
                 _ShellKeyButton(
                   label: 'Esc',
                   onPressed: shellActive ? () => _sendKey('\x1b') : null,
@@ -1286,6 +1291,9 @@ class _TerminalPanelState extends State<TerminalPanel> {
     if (identity != null) {
       _privateKeyController.text = identity.privateKey;
       _passwordController.clear();
+      if ((identity.passphrase ?? '').isNotEmpty) {
+        _passphraseController.text = identity.passphrase!;
+      }
     }
     _updateActive(selected, identity);
   }
@@ -1461,6 +1469,11 @@ class _TerminalPanelState extends State<TerminalPanel> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _clearTerminal() {
+    _terminalBridge.terminal.buffer.clear();
+    _terminalBridge.terminal.buffer.setCursor(0, 0);
   }
 }
 
