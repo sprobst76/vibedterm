@@ -622,16 +622,21 @@ class _TerminalPanelState extends State<TerminalPanel> {
   final _passwordController = TextEditingController();
   final _privateKeyController = TextEditingController();
   final _commandController = TextEditingController(text: 'uname -a');
+  final _shellInputController = TextEditingController();
 
   late final VoidCallback _vaultListener;
   StreamSubscription<String>? _logSub;
   StreamSubscription<SshConnectionStatus>? _statusSub;
   List<String> _logs = [];
   String _output = '';
+  String _shellOutput = '';
   SshConnectionStatus _status = SshConnectionStatus.disconnected;
   bool _busy = false;
   String? _selectedHostId;
   final Map<String, Set<String>> _trustedHostKeys = {};
+  SshShellSession? _shellSession;
+  StreamSubscription<List<int>>? _shellStdoutSub;
+  StreamSubscription<List<int>>? _shellStderrSub;
 
   @override
   void initState() {
@@ -671,6 +676,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _passwordController.dispose();
     _privateKeyController.dispose();
     _commandController.dispose();
+    _shellInputController.dispose();
     super.dispose();
   }
 
@@ -685,6 +691,8 @@ class _TerminalPanelState extends State<TerminalPanel> {
           _buildConnectionCard(isConnected),
           const SizedBox(height: 12),
           _buildCommandCard(isConnected),
+          const SizedBox(height: 12),
+          _buildShellCard(isConnected),
           const SizedBox(height: 12),
           Expanded(child: _buildLogsCard()),
         ],
@@ -875,6 +883,88 @@ class _TerminalPanelState extends State<TerminalPanel> {
     );
   }
 
+  Widget _buildShellCard(bool isConnected) {
+    final shellActive = _shellSession != null;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Interactive shell (experimental)',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _busy || !isConnected || shellActive
+                          ? null
+                          : _startShell,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Open shell'),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: shellActive ? _closeShell : null,
+                      icon: const Icon(Icons.stop),
+                      label: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.black,
+              ),
+              constraints: const BoxConstraints(minHeight: 200, maxHeight: 320),
+              child: SingleChildScrollView(
+                reverse: true,
+                child: SelectableText(
+                  _shellOutput.isEmpty
+                      ? 'Open a shell to stream output.'
+                      : _shellOutput,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    color: Colors.greenAccent,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _shellInputController,
+                    enabled: shellActive,
+                    decoration: const InputDecoration(
+                      labelText: 'Send to shell',
+                    ),
+                    onSubmitted: (_) => _sendShellInput(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: shellActive ? _sendShellInput : null,
+                  child: const Text('Send'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildLogsCard() {
     return Card(
       child: Padding(
@@ -953,6 +1043,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
 
   Future<void> _disconnect() async {
     setState(() => _busy = true);
+    await _closeShell();
     await _manager.disconnect();
     if (mounted) {
       setState(() => _busy = false);
@@ -1074,6 +1165,63 @@ class _TerminalPanelState extends State<TerminalPanel> {
       _trustedHostKeys
         ..clear()
         ..addAll(trusted);
+    });
+  }
+
+  Future<void> _startShell() async {
+    if (_shellSession != null) return;
+    setState(() {
+      _shellOutput = '';
+    });
+    try {
+      final session = await _manager.startShell();
+      _shellSession = session;
+      _shellStdoutSub = session.stdout.listen(_appendShellOutput);
+      _shellStderrSub = session.stderr.listen(_appendShellOutput);
+      unawaited(session.done.whenComplete(() {
+        if (mounted) {
+          setState(() {
+            _shellSession = null;
+          });
+        }
+      }));
+    } catch (e) {
+      final message = e is SshException ? e.message : e.toString();
+      _showMessage('Shell failed: $message');
+    }
+  }
+
+  Future<void> _closeShell() async {
+    await _shellStdoutSub?.cancel();
+    await _shellStderrSub?.cancel();
+    _shellStdoutSub = null;
+    _shellStderrSub = null;
+    await _shellSession?.close();
+    _shellSession = null;
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _sendShellInput() async {
+    final text = _shellInputController.text;
+    if (text.isEmpty || _shellSession == null) return;
+    _shellInputController.clear();
+    try {
+      await _shellSession!.writeString('$text\n');
+    } catch (e) {
+      _showMessage('Send failed: $e');
+    }
+  }
+
+  void _appendShellOutput(List<int> data) {
+    final text = String.fromCharCodes(data);
+    if (!mounted) return;
+    setState(() {
+      _shellOutput += text;
+      if (_shellOutput.length > 8000) {
+        _shellOutput = _shellOutput.substring(_shellOutput.length - 8000);
+      }
     });
   }
 }

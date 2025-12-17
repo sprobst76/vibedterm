@@ -33,4 +33,4 @@ App: `cd apps/ssh_client_app && flutter run -d <device>`
 
 - Vault tab: create/unlock vaults; stores hosts/identities.
 - Hosts tab: manage hosts and identities saved in the vault.
-- Terminal tab: pick a saved host or enter details manually, connect/disconnect, run quick commands, view logs. On first connect it prompts to trust the host key (fingerprint shown) and persists acceptance in vault metadata for reuse.
+- Terminal tab: pick a saved host or enter details manually, connect/disconnect, run quick commands, view logs. On first connect it prompts to trust the host key (fingerprint shown) and persists acceptance in vault metadata for reuse. An experimental interactive shell is available (basic text stream; xterm integration planned).
