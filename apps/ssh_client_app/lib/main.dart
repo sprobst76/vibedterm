@@ -644,6 +644,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
   final _passphraseController = TextEditingController();
   final _commandController = TextEditingController(text: 'uname -a');
   final TerminalBridge _terminalBridge = TerminalBridge();
+  final FocusNode _terminalFocusNode = FocusNode();
   final _trustedKeysExpanded = ValueNotifier<bool>(false);
 
   late final VoidCallback _vaultListener;
@@ -703,6 +704,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _commandController.dispose();
     _terminalBridge.dispose();
     _trustedKeysExpanded.dispose();
+    _terminalFocusNode.dispose();
     super.dispose();
   }
 
@@ -1090,7 +1092,10 @@ class _TerminalPanelState extends State<TerminalPanel> {
                 borderRadius: BorderRadius.circular(8),
               ),
               constraints: const BoxConstraints(minHeight: 260, maxHeight: 480),
-              child: VibedTerminalView(bridge: _terminalBridge),
+              child: VibedTerminalView(
+                bridge: _terminalBridge,
+                focusNode: _terminalFocusNode,
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -1101,6 +1106,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
                   onPressed: shellActive ? _clearTerminal : null,
                   icon: const Icon(Icons.clear_all),
                   label: const Text('Clear'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: shellActive
+                      ? () => _terminalFocusNode.requestFocus()
+                      : null,
+                  icon: const Icon(Icons.keyboard),
+                  label: const Text('Focus'),
                 ),
                 _ShellKeyButton(
                   label: 'Esc',
@@ -1468,6 +1480,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
         }
       }
       _updateActive(selectedHost, _activeIdentity);
+      _terminalFocusNode.requestFocus();
       setState(() {});
       unawaited(session.done.whenComplete(() {
         if (mounted) {
