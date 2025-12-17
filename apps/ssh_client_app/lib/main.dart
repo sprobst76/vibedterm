@@ -1205,6 +1205,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     if (trusted != null && trusted.contains(fingerprint)) {
       return true;
     }
+    final mismatch = trusted != null && trusted.isNotEmpty && !trusted.contains(fingerprint);
     if (!mounted) return false;
     final accept = await showDialog<bool>(
       context: context,
@@ -1218,9 +1219,18 @@ class _TerminalPanelState extends State<TerminalPanel> {
               Text('Host: $host'),
               Text('Type: $type'),
               Text('Fingerprint: $fingerprint'),
+              if (mismatch) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Warning: This host presented a different fingerprint than previously trusted.',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                const SizedBox(height: 4),
+                Text('Previously trusted:\n${trusted.join('\n')}'),
+              ],
               const SizedBox(height: 8),
               const Text(
-                'Accept this host key? It will be remembered for this session.',
+                'Accept this host key? It will be remembered in the vault.',
               ),
             ],
           ),
