@@ -49,6 +49,8 @@ class VaultService {
   static const _demoPassword = 'demo-password';
   static const _demoFileName = 'vibedterm_demo.vlt';
   final Map<String, String> _sessionPasswords = {};
+  VaultHost? _pendingConnectHost;
+  VaultIdentity? _pendingConnectIdentity;
 
   final ValueNotifier<VaultState> state = ValueNotifier<VaultState>(
     const VaultState(status: VaultStatus.locked),
@@ -375,6 +377,14 @@ class VaultService {
       message: 'Identity deleted.',
     );
   }
+
+  void setPendingConnectHost(VaultHost host, {VaultIdentity? identity}) {
+    _pendingConnectHost = host;
+    _pendingConnectIdentity = identity;
+  }
+
+  VaultHost? get pendingConnectHost => _pendingConnectHost;
+  VaultIdentity? get pendingConnectIdentity => _pendingConnectIdentity;
 
   Map<String, Set<String>> trustedHostKeys() {
     final meta = _current?.payload.data.meta ?? const <String, dynamic>{};

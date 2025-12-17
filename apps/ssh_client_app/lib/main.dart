@@ -406,31 +406,36 @@ class HostsScreen extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            ...data.hosts.map(
-              (host) => Card(
-                child: ListTile(
-                  leading: const Icon(Icons.dns_outlined),
-                  title: Text(host.label),
-                  subtitle: Text(
-                    '${host.hostname}:${host.port} • ${host.username}'
-                    '${host.identityId != null ? ' • key: ${host.identityId}' : ''}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _promptAddHost(context, existing: host),
+                    ...data.hosts.map(
+                      (host) => Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.dns_outlined),
+                          title: Text(host.label),
+                          subtitle: Text(
+                            '${host.hostname}:${host.port} • ${host.username}'
+                            '${host.identityId != null ? ' • key: ${host.identityId}' : ''}',
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () => _promptAddHost(context, existing: host),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () => service.deleteHost(host.id),
+                              ),
+                              IconButton(
+                                tooltip: 'Connect',
+                                icon: const Icon(Icons.play_arrow),
+                                onPressed: () => _connectHost(context, host),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => service.deleteHost(host.id),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+                    ),
           ],
         );
       },
@@ -593,6 +598,19 @@ class HostsScreen extends StatelessWidget {
       );
     }
   }
+
+  void _connectHost(BuildContext context, VaultHost host) {
+    VaultIdentity? identity;
+    for (final id in service.currentData?.identities ?? const <VaultIdentity>[]) {
+      if (id.id == host.identityId) {
+        identity = id;
+        break;
+      }
+    }
+    service.setPendingConnectHost(host, identity: identity);
+    final shell = context.findAncestorStateOfType<_HomeShellState>();
+    shell?._setIndex(2);
+  }
 }
 
 class TerminalScreen extends StatelessWidget {
@@ -637,6 +655,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
   String? _selectedHostId;
   final Map<String, Set<String>> _trustedHostKeys = {};
   SshShellSession? _shellSession;
+  Timer? _pendingHostCheckTimer;
 
   @override
   void initState() {
@@ -661,10 +680,12 @@ class _TerminalPanelState extends State<TerminalPanel> {
         _logs = updated.length > 200 ? updated.sublist(updated.length - 200) : updated;
       });
     });
+    _maybeApplyPendingHost();
   }
 
   @override
   void dispose() {
+    _pendingHostCheckTimer?.cancel();
     _statusSub?.cancel();
     _logSub?.cancel();
     unawaited(_manager.disconnect());
@@ -1236,6 +1257,17 @@ class _TerminalPanelState extends State<TerminalPanel> {
   Future<void> _removeTrustedKey(String host, String fingerprint) async {
     await widget.service.untrustHostKey(host: host, fingerprint: fingerprint);
     _refreshTrustedKeys();
+  }
+
+  void _maybeApplyPendingHost() {
+    // Delay slightly to ensure UI is built.
+    _pendingHostCheckTimer = Timer(const Duration(milliseconds: 300), () {
+      final pending = widget.service.pendingConnectHost;
+      if (pending == null) return;
+      widget.service.setPendingConnectHost(pending);
+      _applyHost(pending.id);
+      _connect();
+    });
   }
 
   Future<void> _startShell() async {
