@@ -4,6 +4,7 @@ import 'package:core_ssh/core_ssh.dart';
 import 'package:core_vault/core_vault.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ui_terminal/ui_terminal.dart';
 
 import 'services/vault_service.dart';
@@ -1042,6 +1043,50 @@ class _TerminalPanelState extends State<TerminalPanel> {
               constraints: const BoxConstraints(minHeight: 260, maxHeight: 420),
               child: VibedTerminalView(bridge: _terminalBridge),
             ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _ShellKeyButton(
+                  label: 'Esc',
+                  onPressed: shellActive ? () => _sendKey('\x1b') : null,
+                ),
+                _ShellKeyButton(
+                  label: 'Ctrl+C',
+                  onPressed: shellActive ? () => _sendKey('\x03') : null,
+                ),
+                _ShellKeyButton(
+                  label: 'Ctrl+D',
+                  onPressed: shellActive ? () => _sendKey('\x04') : null,
+                ),
+                _ShellKeyButton(
+                  label: 'Tab',
+                  onPressed: shellActive ? () => _sendKey('\t') : null,
+                ),
+                _ShellKeyButton(
+                  label: '↑',
+                  onPressed: shellActive ? () => _sendKey('\x1b[A') : null,
+                ),
+                _ShellKeyButton(
+                  label: '↓',
+                  onPressed: shellActive ? () => _sendKey('\x1b[B') : null,
+                ),
+                _ShellKeyButton(
+                  label: '←',
+                  onPressed: shellActive ? () => _sendKey('\x1b[D') : null,
+                ),
+                _ShellKeyButton(
+                  label: '→',
+                  onPressed: shellActive ? () => _sendKey('\x1b[C') : null,
+                ),
+                OutlinedButton.icon(
+                  onPressed: shellActive ? _pasteToShell : null,
+                  icon: const Icon(Icons.content_paste),
+                  label: const Text('Paste'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -1280,6 +1325,19 @@ class _TerminalPanelState extends State<TerminalPanel> {
     });
   }
 
+  Future<void> _pasteToShell() async {
+    if (_shellSession == null) return;
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty) return;
+    await _shellSession!.writeString(text);
+  }
+
+  Future<void> _sendKey(String data) async {
+    if (_shellSession == null) return;
+    await _shellSession!.writeString(data);
+  }
+
   Future<void> _startShell() async {
     if (_shellSession != null) return;
     if (_status != SshConnectionStatus.connected) {
@@ -1332,5 +1390,20 @@ class _TerminalPanelState extends State<TerminalPanel> {
     if (mounted) {
       setState(() {});
     }
+  }
+}
+
+class _ShellKeyButton extends StatelessWidget {
+  const _ShellKeyButton({required this.label, this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      child: Text(label),
+    );
   }
 }
