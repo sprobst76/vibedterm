@@ -958,6 +958,11 @@ class _TerminalPanelState extends State<TerminalPanel> {
                                 ),
                               ),
                               IconButton(
+                                tooltip: 'Copy',
+                                icon: const Icon(Icons.copy_outlined),
+                                onPressed: () => _copyToClipboard(fp, 'Fingerprint copied'),
+                              ),
+                              IconButton(
                                 tooltip: 'Remove',
                                 icon: const Icon(Icons.delete_outline),
                                 onPressed: () => _removeTrustedKey(host, fp),
@@ -1405,6 +1410,11 @@ class _TerminalPanelState extends State<TerminalPanel> {
   Future<void> _sendKey(String data) async {
     if (_shellSession == null) return;
     await _shellSession!.writeString(data);
+  }
+
+  Future<void> _copyToClipboard(String text, String message) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    _showMessage(message);
   }
 
   Future<void> _startShell() async {
