@@ -657,6 +657,8 @@ class _TerminalPanelState extends State<TerminalPanel> {
   final Map<String, Set<String>> _trustedHostKeys = {};
   SshShellSession? _shellSession;
   Timer? _pendingHostCheckTimer;
+  VaultHost? _activeHost;
+  VaultIdentity? _activeIdentity;
 
   @override
   void initState() {
@@ -713,6 +715,8 @@ class _TerminalPanelState extends State<TerminalPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildConnectionCard(isConnected),
+          const SizedBox(height: 12),
+          _buildActiveInfo(),
           const SizedBox(height: 12),
           _buildTrustedKeysSection(),
           const SizedBox(height: 12),
@@ -864,6 +868,23 @@ class _TerminalPanelState extends State<TerminalPanel> {
     );
   }
 
+  Widget _buildActiveInfo() {
+    if (_activeHost == null) {
+      return const SizedBox.shrink();
+    }
+    final identityName = _activeIdentity?.name;
+    return Card(
+      color: Colors.teal.shade50,
+      child: ListTile(
+        leading: const Icon(Icons.bolt),
+        title: Text(
+          'Ready: ${_activeHost!.label} (${_activeHost!.hostname}:${_activeHost!.port})',
+        ),
+        subtitle: identityName != null ? Text('Using identity: $identityName') : null,
+      ),
+    );
+  }
+
   Widget _buildTrustedKeysSection() {
     final trusted = widget.service.trustedHostKeys();
     final items = trusted.entries.toList()
@@ -911,9 +932,19 @@ class _TerminalPanelState extends State<TerminalPanel> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          host,
-                          style: Theme.of(context).textTheme.bodyLarge,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              host,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _removeTrustedHost(host),
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Clear'),
+                            ),
+                          ],
                         ),
                         ...fps.map(
                           (fp) => Row(
@@ -1143,6 +1174,22 @@ class _TerminalPanelState extends State<TerminalPanel> {
     final port = int.tryParse(_portController.text) ?? 22;
     setState(() => _busy = true);
     try {
+      VaultHost? selectedHost;
+      VaultIdentity? selectedIdentity;
+      for (final h in widget.service.currentData?.hosts ?? const <VaultHost>[]) {
+        if (h.id == _selectedHostId) {
+          selectedHost = h;
+          break;
+        }
+      }
+      if (selectedHost != null && selectedHost.identityId != null) {
+        for (final id in widget.service.currentData?.identities ?? const <VaultIdentity>[]) {
+          if (id.id == selectedHost.identityId) {
+            selectedIdentity = id;
+            break;
+          }
+        }
+      }
       await _manager.connect(
         SshTarget(
           host: host,
@@ -1161,6 +1208,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
               _handleHostKeyPrompt(host, type, fingerprint),
         ),
       );
+      _updateActive(selectedHost, selectedIdentity);
       _showMessage('Connected to $host');
     } catch (e) {
       final message = e is SshException ? e.message : e.toString();
@@ -1239,6 +1287,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
       _privateKeyController.text = identity.privateKey;
       _passwordController.clear();
     }
+    _updateActive(selected, identity);
   }
 
   Future<bool> _handleHostKeyPrompt(
@@ -1314,6 +1363,11 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _refreshTrustedKeys();
   }
 
+  Future<void> _removeTrustedHost(String host) async {
+    await widget.service.untrustHost(host);
+    _refreshTrustedKeys();
+  }
+
   void _maybeApplyPendingHost() {
     // Delay slightly to ensure UI is built.
     _pendingHostCheckTimer = Timer(const Duration(milliseconds: 300), () {
@@ -1322,6 +1376,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
       widget.service.setPendingConnectHost(pending);
       _applyHost(pending.id);
       _connect();
+    });
+  }
+
+  void _updateActive(VaultHost? host, VaultIdentity? identity) {
+    setState(() {
+      _activeHost = host;
+      _activeIdentity = identity;
     });
   }
 
@@ -1366,6 +1427,16 @@ class _TerminalPanelState extends State<TerminalPanel> {
           (width, height, pixelWidth, pixelHeight) {
         session.resize(width, height);
       };
+      VaultHost? selectedHost;
+      if (_selectedHostId != null) {
+        for (final h in widget.service.currentData?.hosts ?? const <VaultHost>[]) {
+          if (h.id == _selectedHostId) {
+            selectedHost = h;
+            break;
+          }
+        }
+      }
+      _updateActive(selectedHost, _activeIdentity);
       setState(() {});
       unawaited(session.done.whenComplete(() {
         if (mounted) {
