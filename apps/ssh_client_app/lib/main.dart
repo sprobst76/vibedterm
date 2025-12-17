@@ -4,6 +4,7 @@ import 'package:core_ssh/core_ssh.dart';
 import 'package:core_vault/core_vault.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_terminal/ui_terminal.dart';
 
 import 'services/vault_service.dart';
 
@@ -621,22 +622,20 @@ class _TerminalPanelState extends State<TerminalPanel> {
   final _userController = TextEditingController(text: 'root');
   final _passwordController = TextEditingController();
   final _privateKeyController = TextEditingController();
+  final _passphraseController = TextEditingController();
   final _commandController = TextEditingController(text: 'uname -a');
-  final _shellInputController = TextEditingController();
+  final TerminalBridge _terminalBridge = TerminalBridge();
 
   late final VoidCallback _vaultListener;
   StreamSubscription<String>? _logSub;
   StreamSubscription<SshConnectionStatus>? _statusSub;
   List<String> _logs = [];
   String _output = '';
-  String _shellOutput = '';
   SshConnectionStatus _status = SshConnectionStatus.disconnected;
   bool _busy = false;
   String? _selectedHostId;
   final Map<String, Set<String>> _trustedHostKeys = {};
   SshShellSession? _shellSession;
-  StreamSubscription<List<int>>? _shellStdoutSub;
-  StreamSubscription<List<int>>? _shellStderrSub;
 
   @override
   void initState() {
@@ -675,8 +674,9 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _userController.dispose();
     _passwordController.dispose();
     _privateKeyController.dispose();
+    _passphraseController.dispose();
     _commandController.dispose();
-    _shellInputController.dispose();
+    _terminalBridge.dispose();
     super.dispose();
   }
 
@@ -800,6 +800,14 @@ class _TerminalPanelState extends State<TerminalPanel> {
               ),
               maxLines: 3,
             ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _passphraseController,
+              decoration: const InputDecoration(
+                labelText: 'Key passphrase (optional)',
+              ),
+              obscureText: true,
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -919,45 +927,12 @@ class _TerminalPanelState extends State<TerminalPanel> {
             ),
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
-                color: Colors.black,
               ),
-              constraints: const BoxConstraints(minHeight: 200, maxHeight: 320),
-              child: SingleChildScrollView(
-                reverse: true,
-                child: SelectableText(
-                  _shellOutput.isEmpty
-                      ? 'Open a shell to stream output.'
-                      : _shellOutput,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    color: Colors.greenAccent,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _shellInputController,
-                    enabled: shellActive,
-                    decoration: const InputDecoration(
-                      labelText: 'Send to shell',
-                    ),
-                    onSubmitted: (_) => _sendShellInput(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: shellActive ? _sendShellInput : null,
-                  child: const Text('Send'),
-                ),
-              ],
+              constraints: const BoxConstraints(minHeight: 260, maxHeight: 420),
+              child: VibedTerminalView(bridge: _terminalBridge),
             ),
           ],
         ),
@@ -1026,6 +1001,9 @@ class _TerminalPanelState extends State<TerminalPanel> {
           privateKey: _privateKeyController.text.trim().isEmpty
               ? null
               : _privateKeyController.text.trim(),
+          passphrase: _passphraseController.text.isEmpty
+              ? null
+              : _passphraseController.text,
           onHostKeyVerify: (type, fingerprint) =>
               _handleHostKeyPrompt(host, type, fingerprint),
         ),
@@ -1170,14 +1148,33 @@ class _TerminalPanelState extends State<TerminalPanel> {
 
   Future<void> _startShell() async {
     if (_shellSession != null) return;
-    setState(() {
-      _shellOutput = '';
-    });
+    if (_status != SshConnectionStatus.connected) {
+      _showMessage('Connect first.');
+      return;
+    }
+    _terminalBridge.terminal.buffer.clear();
+    _terminalBridge.terminal.buffer.setCursor(0, 0);
+    _terminalBridge.write('Opening shell...\r\n');
     try {
-      final session = await _manager.startShell();
+      final session = await _manager.startShell(
+        ptyConfig: SshPtyConfig(
+          width: _terminalBridge.terminal.viewWidth,
+          height: _terminalBridge.terminal.viewHeight,
+        ),
+      );
       _shellSession = session;
-      _shellStdoutSub = session.stdout.listen(_appendShellOutput);
-      _shellStderrSub = session.stderr.listen(_appendShellOutput);
+      _terminalBridge.attachStreams(
+        stdout: session.stdout,
+        stderr: session.stderr,
+      );
+      _terminalBridge.onOutput = (data) async {
+        await session.writeString(data);
+      };
+      _terminalBridge.terminal.onResize =
+          (width, height, pixelWidth, pixelHeight) {
+        session.resize(width, height);
+      };
+      setState(() {});
       unawaited(session.done.whenComplete(() {
         if (mounted) {
           setState(() {
@@ -1192,36 +1189,14 @@ class _TerminalPanelState extends State<TerminalPanel> {
   }
 
   Future<void> _closeShell() async {
-    await _shellStdoutSub?.cancel();
-    await _shellStderrSub?.cancel();
-    _shellStdoutSub = null;
-    _shellStderrSub = null;
-    await _shellSession?.close();
+    _terminalBridge.onOutput = null;
+    _terminalBridge.terminal.onResize = null;
+    final session = _shellSession;
+    _shellSession = null;
+    await session?.close();
     _shellSession = null;
     if (mounted) {
       setState(() {});
     }
-  }
-
-  Future<void> _sendShellInput() async {
-    final text = _shellInputController.text;
-    if (text.isEmpty || _shellSession == null) return;
-    _shellInputController.clear();
-    try {
-      await _shellSession!.writeString('$text\n');
-    } catch (e) {
-      _showMessage('Send failed: $e');
-    }
-  }
-
-  void _appendShellOutput(List<int> data) {
-    final text = String.fromCharCodes(data);
-    if (!mounted) return;
-    setState(() {
-      _shellOutput += text;
-      if (_shellOutput.length > 8000) {
-        _shellOutput = _shellOutput.substring(_shellOutput.length - 8000);
-      }
-    });
   }
 }
