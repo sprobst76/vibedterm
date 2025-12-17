@@ -419,4 +419,27 @@ class VaultService {
       message: 'Host key trusted for $host.',
     );
   }
+
+  Future<void> untrustHostKey({
+    required String host,
+    required String fingerprint,
+  }) async {
+    if (_current == null) return;
+    final trusted = trustedHostKeys();
+    final set = trusted[host];
+    if (set == null || !set.remove(fingerprint)) return;
+    if (set.isEmpty) {
+      trusted.remove(host);
+    }
+    final meta = Map<String, dynamic>.from(_current!.payload.data.meta);
+    meta['trustedHostKeys'] = trusted.map(
+      (key, value) => MapEntry(key, value.toList()),
+    );
+    _current!.updateMeta(meta);
+    await _current!.save();
+    state.value = state.value.copyWith(
+      status: VaultStatus.unlocked,
+      message: 'Removed trusted key for $host.',
+    );
+  }
 }

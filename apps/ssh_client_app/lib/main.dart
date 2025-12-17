@@ -625,6 +625,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
   final _passphraseController = TextEditingController();
   final _commandController = TextEditingController(text: 'uname -a');
   final TerminalBridge _terminalBridge = TerminalBridge();
+  final _trustedKeysExpanded = ValueNotifier<bool>(false);
 
   late final VoidCallback _vaultListener;
   StreamSubscription<String>? _logSub;
@@ -677,6 +678,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _passphraseController.dispose();
     _commandController.dispose();
     _terminalBridge.dispose();
+    _trustedKeysExpanded.dispose();
     super.dispose();
   }
 
@@ -689,6 +691,8 @@ class _TerminalPanelState extends State<TerminalPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildConnectionCard(isConnected),
+          const SizedBox(height: 12),
+          _buildTrustedKeysSection(),
           const SizedBox(height: 12),
           _buildCommandCard(isConnected),
           const SizedBox(height: 12),
@@ -831,6 +835,89 @@ class _TerminalPanelState extends State<TerminalPanel> {
                   ),
                 ],
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrustedKeysSection() {
+    final trusted = widget.service.trustedHostKeys();
+    final items = trusted.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Trusted host keys',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _trustedKeysExpanded,
+                  builder: (context, expanded, _) {
+                    return IconButton(
+                      onPressed: () =>
+                          _trustedKeysExpanded.value = !expanded,
+                      icon: Icon(expanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down),
+                    );
+                  },
+                ),
+              ],
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: _trustedKeysExpanded,
+              builder: (context, expanded, _) {
+                if (!expanded) {
+                  return const SizedBox.shrink();
+                }
+                if (items.isEmpty) {
+                  return const Text('No trusted keys yet.');
+                }
+                return Column(
+                  children: items.map((entry) {
+                    final host = entry.key;
+                    final fps = entry.value.toList()..sort();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          host,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                        ...fps.map(
+                          (fp) => Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  fp,
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Remove',
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _removeTrustedKey(host, fp),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    );
+                  }).toList(),
+                );
+              },
             ),
           ],
         ),
@@ -1144,6 +1231,11 @@ class _TerminalPanelState extends State<TerminalPanel> {
         ..clear()
         ..addAll(trusted);
     });
+  }
+
+  Future<void> _removeTrustedKey(String host, String fingerprint) async {
+    await widget.service.untrustHostKey(host: host, fingerprint: fingerprint);
+    _refreshTrustedKeys();
   }
 
   Future<void> _startShell() async {
