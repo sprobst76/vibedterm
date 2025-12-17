@@ -935,9 +935,17 @@ class _TerminalPanelState extends State<TerminalPanel> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              host,
-                              style: Theme.of(context).textTheme.bodyLarge,
+                            Expanded(
+                              child: Text(
+                                host,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Copy host',
+                              icon: const Icon(Icons.copy_outlined),
+                              onPressed: () => _copyToClipboard(host, 'Host copied'),
                             ),
                             TextButton.icon(
                               onPressed: () => _removeTrustedHost(host),
@@ -1040,7 +1048,12 @@ class _TerminalPanelState extends State<TerminalPanel> {
     final shellActive = _shellSession != null;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1076,7 +1089,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
               ),
-              constraints: const BoxConstraints(minHeight: 260, maxHeight: 420),
+              constraints: const BoxConstraints(minHeight: 260, maxHeight: 480),
               child: VibedTerminalView(bridge: _terminalBridge),
             ),
             const SizedBox(height: 8),
