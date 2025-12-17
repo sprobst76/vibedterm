@@ -10,3 +10,8 @@ command:
 scripts:
   analyze: melos exec -- flutter analyze
   test: melos exec -- flutter test
+  format: melos exec -- flutter format .
+  check: |
+    melos analyze
+    melos exec --dir="packages/core_vault" -- flutter test
+    melos exec --dir="packages/core_ssh" -- flutter test

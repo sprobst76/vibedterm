@@ -29,6 +29,13 @@ flutter test packages/core_ssh
 
 App: `cd apps/ssh_client_app && flutter run -d <device>`
 
+Melos helpers:
+
+```bash
+melos run analyze
+melos run check    # analyze + core package tests
+```
+
 ## Current UI status
 
 - Vault tab: create/unlock vaults; stores hosts/identities.
