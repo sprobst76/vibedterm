@@ -199,15 +199,20 @@ class VaultScreen extends StatelessWidget {
                     FilledButton.icon(
                       onPressed: () => _pickAndUnlock(context),
                       icon: const Icon(Icons.folder_open),
-                      label: const Text('Pick vault file'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: () => _pickAndCreate(context),
-                      icon: const Icon(Icons.note_add),
-                      label: const Text('Create vault at path'),
-                    ),
-                  ],
+                  label: const Text('Pick vault file'),
                 ),
+                FilledButton.icon(
+                  onPressed: () => _pickAndCreate(context),
+                  icon: const Icon(Icons.note_add),
+                  label: const Text('Create vault at path'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => _quickCreateVault(context),
+                  icon: const Icon(Icons.flash_on),
+                  label: const Text('Quick create (app storage)'),
+                ),
+              ],
+            ),
                 const SizedBox(height: 12),
                 if (service.currentData != null) ...[
                   Text(
@@ -282,6 +287,36 @@ class VaultScreen extends StatelessWidget {
       rememberPasswordForSession: passwordResult.rememberSession,
       rememberPasswordSecurely: passwordResult.rememberSecure,
     );
+  }
+
+  Future<void> _quickCreateVault(BuildContext context) async {
+    final docs = await getApplicationDocumentsDirectory();
+    final path = '${docs.path}/vibedterm_quick.vlt';
+    final passwordResult =
+        await _promptForPassword(context, title: 'Set vault password');
+    if (passwordResult == null || passwordResult.password.isEmpty) return;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final payload = VaultPayload(
+      data: VaultData(
+        version: 1,
+        revision: 1,
+        deviceId: 'device-${DateTime.now().millisecondsSinceEpoch}',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    await service.createVault(
+      path: path,
+      password: passwordResult.password,
+      payload: payload,
+      rememberPasswordForSession: passwordResult.rememberSession,
+      rememberPasswordSecurely: passwordResult.rememberSecure,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Vault created at $path')),
+      );
+    }
   }
 
   Future<_PasswordPromptResult?> _promptForPassword(
