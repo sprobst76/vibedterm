@@ -5,6 +5,7 @@ import 'package:core_vault/core_vault.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:ui_terminal/ui_terminal.dart';
 
 import 'services/vault_service.dart';
@@ -232,7 +233,16 @@ class VaultScreen extends StatelessWidget {
       fileName: 'vibedterm.vlt',
       type: FileType.any,
     );
-    if (result == null) return;
+    var path = result;
+    if (path == null) {
+      final docs = await getApplicationDocumentsDirectory();
+      path = '${docs.path}/vibedterm.vlt';
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No path chosen, creating at $path')),
+        );
+      }
+    }
     final passwordResult =
         await _promptForPassword(context, title: 'Set vault password');
     if (passwordResult == null || passwordResult.password.isEmpty) return;
@@ -247,7 +257,7 @@ class VaultScreen extends StatelessWidget {
       ),
     );
     await service.createVault(
-      path: result,
+      path: path,
       password: passwordResult.password,
       payload: payload,
       rememberPasswordForSession: passwordResult.rememberSession,

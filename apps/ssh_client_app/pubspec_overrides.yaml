@@ -1,4 +1,8 @@
-# melos_managed_dependency_overrides: core_vault
+# melos_managed_dependency_overrides: core_vault,core_ssh,ui_terminal
 dependency_overrides:
+  core_ssh:
+    path: ../../packages/core_ssh
   core_vault:
     path: ../../packages/core_vault
+  ui_terminal:
+    path: ../../packages/ui_terminal
