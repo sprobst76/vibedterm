@@ -70,6 +70,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 700;
     return ValueListenableBuilder<VaultState>(
       valueListenable: _vaultService.state,
       builder: (context, state, child) {
@@ -91,36 +92,54 @@ class _HomeShellState extends State<HomeShell> {
               ),
             ],
           ),
-          body: Row(
-            children: [
-              NavigationRail(
-                selectedIndex: _index,
-                onDestinationSelected: _setIndex,
-                labelType: NavigationRailLabelType.all,
-                destinations: _pages
-                    .map(
-                      (page) => NavigationRailDestination(
-                        icon: Icon(page.icon),
-                        label: Text(page.label),
-                      ),
-                    )
-                    .toList(),
-              ),
-              const VerticalDivider(width: 1),
-              Expanded(
-                child: IndexedStack(
-                  index: _index,
+          body: isWide
+              ? Row(
                   children: [
-                    VaultScreen(service: _vaultService),
-                    HostsScreen(service: _vaultService),
-                    TerminalScreen(service: _vaultService),
+                    NavigationRail(
+                      selectedIndex: _index,
+                      onDestinationSelected: _setIndex,
+                      labelType: NavigationRailLabelType.all,
+                      destinations: _pages
+                          .map(
+                            (page) => NavigationRailDestination(
+                              icon: Icon(page.icon),
+                              label: Text(page.label),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: _buildPageStack()),
                   ],
+                )
+              : _buildPageStack(),
+          bottomNavigationBar: isWide
+              ? null
+              : NavigationBar(
+                  selectedIndex: _index,
+                  onDestinationSelected: _setIndex,
+                  destinations: _pages
+                      .map(
+                        (page) => NavigationDestination(
+                          icon: Icon(page.icon),
+                          label: page.label,
+                        ),
+                      )
+                      .toList(),
                 ),
-              ),
-            ],
-          ),
         );
       },
+    );
+  }
+
+  Widget _buildPageStack() {
+    return IndexedStack(
+      index: _index,
+      children: [
+        VaultScreen(service: _vaultService),
+        HostsScreen(service: _vaultService),
+        TerminalScreen(service: _vaultService),
+      ],
     );
   }
 }
