@@ -24,6 +24,14 @@ class VibedTermApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.teal,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.system,
       home: const HomeShell(),
     );
   }
@@ -679,10 +687,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     });
     _logSub = _manager.logs.listen((msg) {
       if (!mounted) return;
-      setState(() {
-        final updated = [..._logs, msg];
-        _logs = updated.length > 200 ? updated.sublist(updated.length - 200) : updated;
-      });
+      _addLog(msg);
     });
     _maybeApplyPendingHost();
   }
@@ -1243,8 +1248,11 @@ class _TerminalPanelState extends State<TerminalPanel> {
               _handleHostKeyPrompt(host, type, fingerprint),
         ),
       );
+      _addLog('Connected to $host:$port');
       _updateActive(selectedHost, selectedIdentity);
       _showMessage('Connected to $host');
+      // Auto-open shell for convenience.
+      await _startShell();
     } catch (e) {
       final message = e is SshException ? e.message : e.toString();
       _showMessage('Connection failed: $message');
@@ -1406,6 +1414,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _refreshTrustedKeys();
   }
 
+  void _addLog(String msg) {
+    setState(() {
+      final updated = [..._logs, msg];
+      _logs = updated.length > 200 ? updated.sublist(updated.length - 200) : updated;
+    });
+  }
+
   void _maybeApplyPendingHost() {
     // Delay slightly to ensure UI is built.
     _pendingHostCheckTimer = Timer(const Duration(milliseconds: 300), () {
@@ -1480,6 +1495,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
         }
       }
       _updateActive(selectedHost, _activeIdentity);
+      _addLog('Shell opened');
       _terminalFocusNode.requestFocus();
       setState(() {});
       unawaited(session.done.whenComplete(() {
@@ -1487,11 +1503,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
           setState(() {
             _shellSession = null;
           });
+          _addLog('Shell closed');
         }
       }));
     } catch (e) {
       final message = e is SshException ? e.message : e.toString();
       _showMessage('Shell failed: $message');
+      _addLog('Shell failed: $message');
     }
   }
 
