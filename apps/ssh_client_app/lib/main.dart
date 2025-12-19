@@ -706,7 +706,8 @@ class TerminalPanel extends StatefulWidget {
   State<TerminalPanel> createState() => _TerminalPanelState();
 }
 
-class _TerminalPanelState extends State<TerminalPanel> {
+class _TerminalPanelState extends State<TerminalPanel>
+    with SingleTickerProviderStateMixin {
   final _manager = SshConnectionManager();
   final _hostController = TextEditingController(text: 'localhost');
   final _portController = TextEditingController(text: '22');
@@ -715,8 +716,6 @@ class _TerminalPanelState extends State<TerminalPanel> {
   final _privateKeyController = TextEditingController();
   final _passphraseController = TextEditingController();
   final _commandController = TextEditingController(text: 'uname -a');
-  final TerminalBridge _terminalBridge = TerminalBridge();
-  final FocusNode _terminalFocusNode = FocusNode();
   final _trustedKeysExpanded = ValueNotifier<bool>(false);
 
   late final VoidCallback _vaultListener;
@@ -728,7 +727,8 @@ class _TerminalPanelState extends State<TerminalPanel> {
   bool _busy = false;
   String? _selectedHostId;
   final Map<String, Set<String>> _trustedHostKeys = {};
-  SshShellSession? _shellSession;
+  final List<_ShellTab> _tabs = [];
+  TabController? _tabController;
   Timer? _pendingHostCheckTimer;
   VaultHost? _activeHost;
   VaultIdentity? _activeIdentity;
@@ -764,6 +764,10 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _logSub?.cancel();
     unawaited(_manager.disconnect());
     _manager.dispose();
+    for (final tab in _tabs) {
+      tab.dispose();
+    }
+    _tabController?.dispose();
     widget.service.state.removeListener(_vaultListener);
     _hostController.dispose();
     _portController.dispose();
@@ -772,9 +776,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _privateKeyController.dispose();
     _passphraseController.dispose();
     _commandController.dispose();
-    _terminalBridge.dispose();
     _trustedKeysExpanded.dispose();
-    _terminalFocusNode.dispose();
     super.dispose();
   }
 
@@ -1117,7 +1119,8 @@ class _TerminalPanelState extends State<TerminalPanel> {
   }
 
   Widget _buildShellCard(bool isConnected) {
-    final shellActive = _shellSession != null;
+    final shellActive = _activeTab()?.session != null;
+    final hasTabs = _tabs.isNotEmpty;
     return Card(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
@@ -1139,34 +1142,80 @@ class _TerminalPanelState extends State<TerminalPanel> {
                 Row(
                   children: [
                     OutlinedButton.icon(
-                      onPressed: _busy || !isConnected || shellActive
+                      onPressed: _busy || !isConnected
                           ? null
-                          : _startShell,
+                          : () => _startShellForTab(_ensureTabIndex()),
                       icon: const Icon(Icons.play_arrow),
                       label: const Text('Open shell'),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton.icon(
-                      onPressed: shellActive ? _closeShell : null,
+                      onPressed: shellActive
+                          ? () => _closeShellForTab(_tabController?.index ?? 0)
+                          : null,
                       icon: const Icon(Icons.stop),
                       label: const Text('Close'),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: _busy || !isConnected
+                          ? null
+                          : () => _addTab(startShell: true),
+                      icon: const Icon(Icons.add),
+                      label: const Text('New tab'),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: hasTabs ? () => _closeCurrentTab() : null,
+                      icon: const Icon(Icons.close),
+                      label: const Text('Close tab'),
                     ),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
+            if (hasTabs && _tabController != null) ...[
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabs: _tabs
+                    .map(
+                      (t) => Tab(
+                        text: t.title,
+                        icon: t.session != null
+                            ? const Icon(Icons.terminal)
+                            : const Icon(Icons.hourglass_empty),
+                      ),
+                    )
+                    .toList(),
               ),
-              constraints: const BoxConstraints(minHeight: 260, maxHeight: 480),
-              child: VibedTerminalView(
-                bridge: _terminalBridge,
-                focusNode: _terminalFocusNode,
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                constraints: const BoxConstraints(minHeight: 260, maxHeight: 480),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: _tabs
+                      .map(
+                        (t) => VibedTerminalView(
+                          bridge: t.bridge,
+                          focusNode: t.focusNode,
+                        ),
+                      )
+                      .toList(),
+                ),
               ),
-            ),
+            ] else ...[
+              Container(
+                height: 260,
+                alignment: Alignment.center,
+                child: const Text('No tabs. Connect and open a shell to start.'),
+              ),
+            ],
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -1179,7 +1228,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
                 ),
                 OutlinedButton.icon(
                   onPressed: shellActive
-                      ? () => _terminalFocusNode.requestFocus()
+                      ? () => _activeTab()?.focusNode.requestFocus()
                       : null,
                   icon: const Icon(Icons.keyboard),
                   label: const Text('Focus'),
@@ -1220,6 +1269,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
                   onPressed: shellActive ? _pasteToShell : null,
                   icon: const Icon(Icons.content_paste),
                   label: const Text('Paste'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _tabs.length < 2 && isConnected
+                      ? () => _addTab(startShell: true)
+                      : null,
+                  icon: const Icon(Icons.add_box_outlined),
+                  label: const Text('New tab (auto shell)'),
                 ),
               ],
             ),
@@ -1324,7 +1380,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
       _updateActive(selectedHost, selectedIdentity);
       _showMessage('Connected to $host');
       // Auto-open shell for convenience.
-      await _startShell();
+      await _startShellForTab(_ensureTabIndex());
     } catch (e) {
       final message = e is SshException ? e.message : e.toString();
       _showMessage('Connection failed: $message');
@@ -1338,7 +1394,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
 
   Future<void> _disconnect() async {
     setState(() => _busy = true);
-    await _closeShell();
+    await _closeAllShells();
     await _manager.disconnect();
     if (mounted) {
       setState(() => _busy = false);
@@ -1520,16 +1576,18 @@ class _TerminalPanelState extends State<TerminalPanel> {
   }
 
   Future<void> _pasteToShell() async {
-    if (_shellSession == null) return;
+    final tab = _activeTab();
+    if (tab?.session == null) return;
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text == null || text.isEmpty) return;
-    await _shellSession!.writeString(text);
+    await tab!.session!.writeString(text);
   }
 
   Future<void> _sendKey(String data) async {
-    if (_shellSession == null) return;
-    await _shellSession!.writeString(data);
+    final tab = _activeTab();
+    if (tab?.session == null) return;
+    await tab!.session!.writeString(data);
   }
 
   Future<void> _copyToClipboard(String text, String message) async {
@@ -1537,32 +1595,34 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _showMessage(message);
   }
 
-  Future<void> _startShell() async {
-    if (_shellSession != null) return;
+  Future<void> _startShellForTab(int index) async {
+    if (index < 0 || index >= _tabs.length) return;
     if (_status != SshConnectionStatus.connected) {
       _showMessage('Connect first.');
       return;
     }
-    _terminalBridge.terminal.buffer.clear();
-    _terminalBridge.terminal.buffer.setCursor(0, 0);
-    _terminalBridge.write('Opening shell...\r\n');
-    _addLog('Opening shell session...');
+    final tab = _tabs[index];
+    if (tab.session != null) return;
+    tab.bridge.terminal.buffer.clear();
+    tab.bridge.terminal.buffer.setCursor(0, 0);
+    tab.bridge.write('Opening shell...\r\n');
+    _addLog('Opening shell session... (${tab.title})');
     try {
       final session = await _manager.startShell(
         ptyConfig: SshPtyConfig(
-          width: _terminalBridge.terminal.viewWidth,
-          height: _terminalBridge.terminal.viewHeight,
+          width: tab.bridge.terminal.viewWidth,
+          height: tab.bridge.terminal.viewHeight,
         ),
       );
-      _shellSession = session;
-      _terminalBridge.attachStreams(
+      tab.session = session;
+      tab.bridge.attachStreams(
         stdout: session.stdout,
         stderr: session.stderr,
       );
-      _terminalBridge.onOutput = (data) async {
+      tab.bridge.onOutput = (data) async {
         await session.writeString(data);
       };
-      _terminalBridge.terminal.onResize =
+      tab.bridge.terminal.onResize =
           (width, height, pixelWidth, pixelHeight) {
         session.resize(width, height);
       };
@@ -1576,15 +1636,15 @@ class _TerminalPanelState extends State<TerminalPanel> {
         }
       }
       _updateActive(selectedHost, _activeIdentity);
-      _addLog('Shell opened');
-      _terminalFocusNode.requestFocus();
+      _addLog('Shell opened (${tab.title})');
+      tab.focusNode.requestFocus();
       setState(() {});
       unawaited(session.done.whenComplete(() {
         if (mounted) {
           setState(() {
-            _shellSession = null;
+            tab.session = null;
           });
-          _addLog('Shell closed');
+          _addLog('Shell closed (${tab.title})');
         }
       }));
     } catch (e) {
@@ -1594,21 +1654,99 @@ class _TerminalPanelState extends State<TerminalPanel> {
     }
   }
 
-  Future<void> _closeShell() async {
-    _terminalBridge.onOutput = null;
-    _terminalBridge.terminal.onResize = null;
-    final session = _shellSession;
-    _shellSession = null;
+  Future<void> _closeShellForTab(int index) async {
+    if (index < 0 || index >= _tabs.length) return;
+    final tab = _tabs[index];
+    tab.bridge.onOutput = null;
+    tab.bridge.terminal.onResize = null;
+    final session = tab.session;
+    tab.session = null;
     await session?.close();
-    _shellSession = null;
     if (mounted) {
       setState(() {});
     }
   }
 
+  Future<void> _closeAllShells() async {
+    for (var i = 0; i < _tabs.length; i++) {
+      await _closeShellForTab(i);
+    }
+  }
+
   void _clearTerminal() {
-    _terminalBridge.terminal.buffer.clear();
-    _terminalBridge.terminal.buffer.setCursor(0, 0);
+    final tab = _activeTab();
+    if (tab == null) return;
+    tab.bridge.terminal.buffer.clear();
+    tab.bridge.terminal.buffer.setCursor(0, 0);
+  }
+
+  int _ensureTabIndex() {
+    if (_tabs.isEmpty) {
+      _addTab();
+    }
+    return _tabController?.index ?? 0;
+  }
+
+  _ShellTab? _activeTab() {
+    if (_tabs.isEmpty) return null;
+    final idx = _tabController?.index ?? 0;
+    if (idx < 0 || idx >= _tabs.length) return null;
+    return _tabs[idx];
+  }
+
+  void _addTab({bool startShell = false}) {
+    final title = _activeHost?.label != null
+        ? '${_activeHost!.label} ${_tabs.length + 1}'
+        : 'Tab ${_tabs.length + 1}';
+    final tab = _ShellTab(title: title);
+    setState(() {
+      _tabs.add(tab);
+      _resetTabController(_tabs.length - 1);
+    });
+    if (startShell) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startShellForTab(_tabController?.index ?? 0);
+      });
+    }
+  }
+
+  void _closeCurrentTab() {
+    final idx = _tabController?.index ?? 0;
+    _disposeTab(idx);
+  }
+
+  void _disposeTab(int index) {
+    if (index < 0 || index >= _tabs.length) return;
+    final tab = _tabs.removeAt(index);
+    tab.dispose();
+    final nextIndex =
+        _tabs.isEmpty ? 0 : (index >= _tabs.length ? _tabs.length - 1 : index);
+    _resetTabController(nextIndex);
+    setState(() {});
+  }
+
+  void _resetTabController(int preferredIndex) {
+    final newLength = _tabs.length;
+    final int newIndex;
+    if (newLength == 0) {
+      newIndex = 0;
+    } else if (preferredIndex < 0) {
+      newIndex = 0;
+    } else if (preferredIndex >= newLength) {
+      newIndex = newLength - 1;
+    } else {
+      newIndex = preferredIndex;
+    }
+    _tabController?.dispose();
+    if (newLength == 0) {
+      _tabController = null;
+      return;
+    }
+    _tabController = TabController(
+      length: newLength,
+      vsync: this,
+      initialIndex: newIndex,
+    );
   }
 }
 
@@ -1624,5 +1762,22 @@ class _ShellKeyButton extends StatelessWidget {
       onPressed: onPressed,
       child: Text(label),
     );
+  }
+}
+
+class _ShellTab {
+  _ShellTab({required this.title})
+      : bridge = TerminalBridge(),
+        focusNode = FocusNode();
+
+  final String title;
+  final TerminalBridge bridge;
+  final FocusNode focusNode;
+  SshShellSession? session;
+
+  void dispose() {
+    session?.close();
+    bridge.dispose();
+    focusNode.dispose();
   }
 }
