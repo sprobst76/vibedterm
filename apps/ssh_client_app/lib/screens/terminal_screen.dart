@@ -364,13 +364,9 @@ class TerminalPanelState extends State<TerminalPanel>
         .where((i) => i.id == host.identityId)
         .firstOrNull;
 
-    // Prompt for password if no identity or identity has no private key
-    String? password;
-    final hasValidKey = identity?.privateKey.isNotEmpty == true;
-    if (!hasValidKey) {
-      password = await _promptForPassword(host);
-      if (password == null) return; // User cancelled
-    }
+    // Always prompt for password (can be empty if using key auth)
+    final password = await _promptForPassword(host, hasKey: identity?.privateKey.isNotEmpty == true);
+    if (password == null) return; // User cancelled
 
     // Create new tab
     final tab = _ConnectionTab(
@@ -496,12 +492,13 @@ class TerminalPanelState extends State<TerminalPanel>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<String?> _promptForPassword(VaultHost host) async {
+  Future<String?> _promptForPassword(VaultHost host, {bool hasKey = false}) async {
     final controller = TextEditingController();
     final result = await showDialog<String?>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('SSH Password'),
+        title: const Text('SSH Authentication'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -511,12 +508,20 @@ class TerminalPanelState extends State<TerminalPanel>
             TextField(
               controller: controller,
               obscureText: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Password',
-                border: OutlineInputBorder(),
+                hintText: hasKey ? 'Leave empty for key auth' : null,
+                border: const OutlineInputBorder(),
               ),
               onSubmitted: (value) => Navigator.pop(context, value),
             ),
+            if (hasKey) ...[
+              const SizedBox(height: 8),
+              Text(
+                'A private key is configured. Leave empty to use key authentication.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
         actions: [
@@ -532,7 +537,8 @@ class TerminalPanelState extends State<TerminalPanel>
       ),
     );
     controller.dispose();
-    return result?.isNotEmpty == true ? result : null;
+    // Return empty string (not null) to indicate "use key auth"
+    return result;
   }
 
   Future<bool> _handleHostKeyPrompt(
@@ -879,7 +885,7 @@ class _ConnectionTab {
           host: host.hostname,
           port: host.port,
           username: host.username,
-          password: password,
+          password: password?.isNotEmpty == true ? password : null,
           privateKey: identity?.privateKey,
           passphrase: identity?.passphrase,
           onHostKeyVerify: (type, fp) => _handleHostKey(
