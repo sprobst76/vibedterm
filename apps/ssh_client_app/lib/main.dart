@@ -748,6 +748,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
       setState(() {
         _status = status;
       });
+      _addLog('Status update: ${status.name}');
     });
     _logSub = _manager.logs.listen((msg) {
       if (!mounted) return;
@@ -1294,6 +1295,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
           }
         }
       }
+      _addLog(
+        'Connecting -> host=$host port=$port user=$username '
+        'savedHost=${selectedHost?.label ?? 'manual'} '
+        'keyProvided=${_privateKeyController.text.trim().isNotEmpty || selectedIdentity != null} '
+        'passphraseProvided=${_passphraseController.text.isNotEmpty} '
+        'passwordProvided=${_passwordController.text.isNotEmpty}',
+      );
       await _manager.connect(
         SshTarget(
           host: host,
@@ -1320,6 +1328,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     } catch (e) {
       final message = e is SshException ? e.message : e.toString();
       _showMessage('Connection failed: $message');
+      _addLog('Connection failed: $message');
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -1407,6 +1416,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
   ) async {
     final trusted = _trustedHostKeys[host];
     if (trusted != null && trusted.contains(fingerprint)) {
+      _addLog('Host key known, auto-accept for $host ($fingerprint)');
       return true;
     }
     final mismatch = trusted != null && trusted.isNotEmpty && !trusted.contains(fingerprint);
@@ -1452,10 +1462,12 @@ class _TerminalPanelState extends State<TerminalPanel> {
       },
     );
     if (accept == true) {
+      _addLog('Host key trusted for $host ($fingerprint)');
       _trustedHostKeys.putIfAbsent(host, () => <String>{}).add(fingerprint);
       await widget.service.trustHostKey(host: host, fingerprint: fingerprint);
       return true;
     }
+    _addLog('Host key rejected for $host ($fingerprint)');
     return false;
   }
 
@@ -1530,6 +1542,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     _terminalBridge.terminal.buffer.clear();
     _terminalBridge.terminal.buffer.setCursor(0, 0);
     _terminalBridge.write('Opening shell...\r\n');
+    _addLog('Opening shell session...');
     try {
       final session = await _manager.startShell(
         ptyConfig: SshPtyConfig(
