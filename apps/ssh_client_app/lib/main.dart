@@ -729,6 +729,7 @@ class _TerminalPanelState extends State<TerminalPanel>
   final Map<String, Set<String>> _trustedHostKeys = {};
   final List<_ShellTab> _tabs = [];
   TabController? _tabController;
+  bool _showAdvancedForm = false;
   Timer? _pendingHostCheckTimer;
   VaultHost? _activeHost;
   VaultIdentity? _activeIdentity;
@@ -859,62 +860,12 @@ class _TerminalPanelState extends State<TerminalPanel>
             ],
             Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _hostController,
-                    decoration: const InputDecoration(labelText: 'Host'),
-                  ),
+                FilledButton.icon(
+                  onPressed: _busy ? null : _promptAndConnectHost,
+                  icon: const Icon(Icons.play_circle_fill),
+                  label: const Text('New terminal'),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 110,
-                  child: TextField(
-                    controller: _portController,
-                    decoration: const InputDecoration(labelText: 'Port'),
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _userController,
-                    decoration: const InputDecoration(labelText: 'Username'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Password (optional)'),
-                    obscureText: true,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _privateKeyController,
-              decoration: const InputDecoration(
-                labelText: 'Private key (PEM, optional)',
-                alignLabelWithHint: true,
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _passphraseController,
-              decoration: const InputDecoration(
-                labelText: 'Key passphrase (optional)',
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
+                const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed: _busy ? null : _connect,
                   icon: const Icon(Icons.power_settings_new),
@@ -934,6 +885,70 @@ class _TerminalPanelState extends State<TerminalPanel>
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            ExpansionTile(
+              title: const Text('Advanced manual connect'),
+              initiallyExpanded: _showAdvancedForm,
+              onExpansionChanged: (v) => setState(() => _showAdvancedForm = v),
+              childrenPadding: const EdgeInsets.only(top: 8, bottom: 4),
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _hostController,
+                        decoration: const InputDecoration(labelText: 'Host'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 110,
+                      child: TextField(
+                        controller: _portController,
+                        decoration: const InputDecoration(labelText: 'Port'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _userController,
+                        decoration: const InputDecoration(labelText: 'Username'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _passwordController,
+                        decoration: const InputDecoration(labelText: 'Password (optional)'),
+                        obscureText: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _privateKeyController,
+                  decoration: const InputDecoration(
+                    labelText: 'Private key (PEM, optional)',
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _passphraseController,
+                  decoration: const InputDecoration(
+                    labelText: 'Key passphrase (optional)',
+                  ),
+                  obscureText: true,
+                ),
               ],
             ),
           ],
@@ -1573,6 +1588,38 @@ class _TerminalPanelState extends State<TerminalPanel>
       _activeHost = host;
       _activeIdentity = identity;
     });
+  }
+
+  Future<void> _promptAndConnectHost() async {
+    final data = widget.service.currentData;
+    if (data == null || data.hosts.isEmpty) {
+      _showMessage('No hosts in vault. Add one first.');
+      return;
+    }
+    final selected = await showDialog<VaultHost>(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('Open terminal'),
+          children: data.hosts
+              .map(
+                (h) => SimpleDialogOption(
+                  onPressed: () => Navigator.of(context).pop(h),
+                  child: ListTile(
+                    title: Text(h.label),
+                    subtitle: Text('${h.username}@${h.hostname}:${h.port}'),
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+    if (selected == null) return;
+    _applyHost(selected.id);
+    await _connect();
+    // Make sure a tab exists.
+    _ensureTabIndex();
   }
 
   Future<void> _pasteToShell() async {
