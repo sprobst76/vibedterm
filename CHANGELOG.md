@@ -12,6 +12,30 @@
 - **Close confirmation**: Dialog prompts before closing tabs with active connections.
 - **Trusted keys dialog**: Host key management moved to menu dialog.
 
+### SSH Authentication Improvements
+
+- **Password authentication**: Always prompt for password before connecting; leave empty to use key-only auth.
+- **Auth method logging**: Debug output shows available auth methods (`key=true/false, password=true/false`).
+- **Key parsing error handling**: If private key parsing fails, continues with password auth as fallback.
+- **Better error messages**: Logs show number of keys loaded and parsing errors.
+
+### Vault Auto-Unlock
+
+- **Auto-unlock on startup**: If vault password was saved securely ("Remember securely"), vault unlocks automatically on app start.
+- **Last vault persistence**: Remembers last opened vault path across sessions.
+
+### UX Improvements
+
+- **Enter key confirms dialogs**: Password dialogs (vault and SSH) can be confirmed with Enter key.
+- **Autofocus on password fields**: Password input fields receive focus automatically.
+
+### Windows Platform Fixes
+
+- **Fixed xterm focus errors**: Disabled autofocus on `VibedTerminalView` to prevent Windows `PlatformException: view ID is null`.
+- **Delayed focus request**: Added 100ms delay before requesting terminal focus after tab creation.
+- **Fixed controller disposal errors**: Removed premature `TextEditingController.dispose()` calls that caused "used after disposed" errors during dialog animations.
+- **Fixed FocusNode disposal errors**: Removed manual FocusNode management in favor of Flutter's built-in autofocus.
+
 ### Code Structure
 
 - Extracted screens from monolithic `main.dart` into `lib/screens/` directory:
@@ -20,6 +44,11 @@
   - `terminal_screen.dart` - Terminus-like multi-tab terminal
 - Replaced `findAncestorStateOfType` hack with clean `onConnectHost` callback pattern.
 - Added `clearPendingConnect()` to VaultService for proper cleanup.
+
+### Known Issues
+
+- **Windows PlatformException**: `Could not set client, view ID is null` errors still appear in debug console but don't block functionality. This is a known xterm/Flutter Windows issue.
+- **Key auth may fail**: If the private key in the vault doesn't match the public key authorized on the server, key auth fails. Use password auth or import the correct key.
 
 ### Previous Changes
 
