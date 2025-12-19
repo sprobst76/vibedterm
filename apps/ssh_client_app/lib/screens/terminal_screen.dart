@@ -364,11 +364,19 @@ class TerminalPanelState extends State<TerminalPanel>
         .where((i) => i.id == host.identityId)
         .firstOrNull;
 
+    // Prompt for password if no identity
+    String? password;
+    if (identity == null) {
+      password = await _promptForPassword(host);
+      if (password == null) return; // User cancelled
+    }
+
     // Create new tab
     final tab = _ConnectionTab(
       id: _uuid.v4(),
       host: host,
       identity: identity,
+      password: password,
     );
 
     tab.init(
@@ -394,7 +402,12 @@ class TerminalPanelState extends State<TerminalPanel>
 
     if (mounted) {
       setState(() {});
-      tab.focusNode.requestFocus();
+      // Delay focus to avoid Windows platform exception
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          tab.focusNode.requestFocus();
+        }
+      });
     }
   }
 
@@ -480,6 +493,46 @@ class TerminalPanelState extends State<TerminalPanel>
   void _showMessage(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<String?> _promptForPassword(VaultHost host) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('SSH Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${host.username}@${host.hostname}:${host.port}'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (value) => Navigator.pop(context, value),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result?.isNotEmpty == true ? result : null;
   }
 
   Future<bool> _handleHostKeyPrompt(
@@ -770,6 +823,7 @@ class _ConnectionTab {
     required this.id,
     required this.host,
     this.identity,
+    this.password,
   })  : manager = SshConnectionManager(),
         bridge = TerminalBridge(),
         focusNode = FocusNode();
@@ -777,6 +831,7 @@ class _ConnectionTab {
   final String id;
   final VaultHost host;
   final VaultIdentity? identity;
+  final String? password;
   final SshConnectionManager manager;
   final TerminalBridge bridge;
   final FocusNode focusNode;
@@ -824,6 +879,7 @@ class _ConnectionTab {
           host: host.hostname,
           port: host.port,
           username: host.username,
+          password: password,
           privateKey: identity?.privateKey,
           passphrase: identity?.passphrase,
           onHostKeyVerify: (type, fp) => _handleHostKey(

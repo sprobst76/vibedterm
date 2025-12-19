@@ -62,17 +62,19 @@ class VibedTerminalView extends StatelessWidget {
     super.key,
     required this.bridge,
     this.focusNode,
+    this.autofocus = false,
   });
 
   final TerminalBridge bridge;
   final FocusNode? focusNode;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     return TerminalView(
       bridge.terminal,
       backgroundOpacity: 0.95,
-      autofocus: true,
+      autofocus: autofocus,
       focusNode: focusNode,
       padding: const EdgeInsets.all(8),
     );
