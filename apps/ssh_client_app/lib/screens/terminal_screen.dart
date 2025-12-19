@@ -364,9 +364,10 @@ class TerminalPanelState extends State<TerminalPanel>
         .where((i) => i.id == host.identityId)
         .firstOrNull;
 
-    // Prompt for password if no identity
+    // Prompt for password if no identity or identity has no private key
     String? password;
-    if (identity == null) {
+    final hasValidKey = identity?.privateKey.isNotEmpty == true;
+    if (!hasValidKey) {
       password = await _promptForPassword(host);
       if (password == null) return; // User cancelled
     }
@@ -510,7 +511,6 @@ class TerminalPanelState extends State<TerminalPanel>
             TextField(
               controller: controller,
               obscureText: true,
-              autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Password',
                 border: OutlineInputBorder(),
