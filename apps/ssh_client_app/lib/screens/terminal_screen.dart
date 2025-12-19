@@ -541,8 +541,8 @@ class TerminalPanelState extends State<TerminalPanel>
       },
     );
 
-    controller.dispose();
-    // Return empty string (not null) to indicate "use key auth"
+    // Note: Don't dispose controller here - dialog animation might still use it
+    // Let garbage collection handle it
     return result;
   }
 

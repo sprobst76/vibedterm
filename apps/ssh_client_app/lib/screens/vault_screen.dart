@@ -241,13 +241,11 @@ class VaultScreen extends StatelessWidget {
       },
     );
     if (ok != true) {
-      controller.dispose();
       return null;
     }
-    final password = controller.text;
-    controller.dispose();
+    // Note: Don't dispose controller here - dialog animation might still use it
     return PasswordPromptResult(
-      password,
+      controller.text,
       rememberSession: rememberSession,
       rememberSecure: rememberSecure,
     );
