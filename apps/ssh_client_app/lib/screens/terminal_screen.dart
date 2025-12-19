@@ -877,7 +877,15 @@ class _ConnectionTab {
     status = TabConnectionStatus.connecting;
     _onStatusChange?.call();
     bridge.write('Connecting to ${host.hostname}:${host.port}...\r\n');
-    _addLog('Connecting to ${host.hostname}:${host.port}');
+
+    // Debug logging
+    final key = identity?.privateKey ?? '';
+    final keyPreview = key.isNotEmpty
+        ? '${key.substring(0, key.length.clamp(0, 40))}...'
+        : '(no key)';
+    _addLog('Connecting: ${host.username}@${host.hostname}:${host.port}');
+    _addLog('Key: $keyPreview');
+    _addLog('Password provided: ${password?.isNotEmpty == true}');
 
     try {
       await manager.connect(
