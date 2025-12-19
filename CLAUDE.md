@@ -49,10 +49,12 @@ melos run format           # Format all packages
 - `SshClientAdapter` interface abstracts the underlying SSH client for testability
 - `SshTarget` configures connection with host key verification callback
 - `SshShellSession` provides streams (stdout/stderr) and write/resize/close methods
+- Key parsing with error handling: logs failures, continues with password auth
 
 **Terminal Integration (ui_terminal)**
 - `TerminalBridge` connects SSH streams to xterm `Terminal` instance
 - `VibedTerminalView` widget wraps xterm's `TerminalView`
+- `autofocus` disabled by default to avoid Windows platform issues
 
 **App Structure (ssh_client_app)**
 - `lib/main.dart` - App shell, navigation, and `HomeShell` widget
@@ -64,7 +66,7 @@ melos run format           # Format all packages
 
 **Terminal Architecture (Terminus-like)**
 - Each tab (`_ConnectionTab`) owns its own `SshConnectionManager` - independent connections
-- `_ConnectionTab` contains: manager, host, identity, bridge, session, status, logs
+- `_ConnectionTab` contains: manager, host, identity, password, bridge, session, status, logs
 - UI: Tab-Bar with status dots, expanded terminal area, compact status bar, collapsible logs drawer
 - Quick-connect via BottomSheet host picker or ActionChips in empty state
 - Tab close with confirmation dialog for active connections
@@ -73,11 +75,12 @@ melos run format           # Format all packages
 
 1. User creates/unlocks vault via `VaultService` (password-derived key with Argon2id)
 2. Hosts and identities stored in `VaultData`, encrypted on disk
-3. User selects host → new `_ConnectionTab` created with its own `SshConnectionManager`
-4. Tab connects to host, auto-opens shell, attaches to `TerminalBridge`
-5. Terminal output flows: SSH stdout/stderr -> TerminalBridge -> xterm Terminal
-6. User input flows: xterm onOutput -> TerminalBridge.onOutput -> SSH stdin
-7. Closing tab disconnects that connection (independent of other tabs)
+3. User selects host → password dialog shown → new `_ConnectionTab` created
+4. Tab connects with key auth (if identity linked) and/or password auth
+5. Tab auto-opens shell, attaches to `TerminalBridge`
+6. Terminal output flows: SSH stdout/stderr -> TerminalBridge -> xterm Terminal
+7. User input flows: xterm onOutput -> TerminalBridge.onOutput -> SSH stdin
+8. Closing tab disconnects that connection (independent of other tabs)
 
 ### Dependencies
 
@@ -86,3 +89,60 @@ melos run format           # Format all packages
 - **xterm** - Terminal emulation widget in ui_terminal
 - **flutter_secure_storage** - Device keychain for remembered passwords
 - **shared_preferences** - Last vault path persistence
+
+## Troubleshooting
+
+### SSH Authentication Issues
+
+**Symptoms:** "All authentication methods failed" despite having a key configured.
+
+**Debug output to check:**
+```
+[SSH-DEBUG] User: username
+[SSH-DEBUG] Host: hostname:port
+[SSH-DEBUG] Key: -----BEGIN OPENSSH... (first 50 chars)
+[SSH-DEBUG] Password provided: true/false
+[SSH:Host] Loaded N key(s) from private key
+[SSH:Host] Auth methods: key=true/false, password=true/false
+```
+
+**Common causes:**
+1. **Wrong key in vault**: The private key stored in the vault is different from the one authorized on the server. Verify with `ssh -vv user@host` to see which key works.
+2. **Key not authorized on server**: Public key not in `~/.ssh/authorized_keys` on the remote host.
+3. **Key parsing failed**: Check for "Failed to parse private key" in logs.
+4. **No password provided**: If key auth fails and password is empty, connection fails.
+
+**Solution:** Import the correct key (from `~/.ssh/id_*`) into the vault identity.
+
+### Windows Platform Exceptions
+
+**Symptoms:** Console shows errors like:
+```
+PlatformException(Bad Arguments, Could not set client, view ID is null., null, null)
+PlatformException(Internal Consistency Error, Set editing state has been invoked, but no client is set., null, null)
+```
+
+**Cause:** Known issue with xterm package and Flutter text input on Windows.
+
+**Mitigations applied:**
+- Disabled `autofocus` on `VibedTerminalView`
+- Added 100ms delay before `focusNode.requestFocus()` after tab creation
+- Removed manual FocusNode management (rely on Flutter's built-in autofocus)
+
+**Status:** Errors still appear but don't block functionality. May need upstream fix in xterm package.
+
+### TextEditingController/FocusNode Disposal Errors
+
+**Symptoms:** "A TextEditingController was used after being disposed" or "A FocusNode was used after being disposed"
+
+**Cause:** Disposing controllers/focus nodes while dialog animations are still running.
+
+**Solution:** Don't manually dispose in dialog functions - let garbage collection handle it. Dialog animations may still reference these objects after `showDialog` returns.
+
+## Code Conventions
+
+- Screens in `lib/screens/` with barrel export via `screens.dart`
+- Services in `lib/services/` using `ValueNotifier` for state
+- Each `_ConnectionTab` is self-contained with its own SSH connection lifecycle
+- Use `// ignore: avoid_print` for intentional debug prints
+- Password dialogs use `autofocus: true` and `onSubmitted` for Enter key support

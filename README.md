@@ -8,11 +8,14 @@ Flutter-based SSH client targeting Windows, Linux, and Android with an encrypted
 - **Multi-Tab Terminal**: Terminus-like UX with independent SSH connections per tab.
 - **Quick Connect**: Fast host selection via BottomSheet picker or ActionChip shortcuts.
 - **Host Key Verification**: Trust prompts with fingerprint display, persisted in vault.
+- **Auto-Unlock**: Remembers vault password securely and auto-unlocks on startup.
+- **Password & Key Auth**: Supports both password and private key authentication.
 
 ## Docs
 
 - Project plan: `docs/plan.md`
 - Changelog: `CHANGELOG.md`
+- Todo & Known Issues: `TODO.md`
 - Claude Code guidance: `CLAUDE.md`
 
 ## Repo Layout
@@ -47,7 +50,7 @@ melos run check    # analyze + core package tests
 ## Current UI
 
 ### Vault Tab
-Create or unlock encrypted vault files. Supports password memory (session or secure storage).
+Create or unlock encrypted vault files. Supports password memory (session or secure storage). Auto-unlocks on startup if password was saved securely.
 
 ### Hosts Tab
 Manage SSH hosts and identities stored in the vault. Link identities (private keys) to hosts.
@@ -60,3 +63,23 @@ Manage SSH hosts and identities stored in the vault. Link identities (private ke
 - **Per-Tab Logs**: Collapsible drawer showing connection logs for active tab.
 
 Each tab maintains its own independent SSH connection - you can connect to multiple different servers simultaneously.
+
+## SSH Authentication
+
+### Password Auth
+When connecting, a dialog prompts for password. Enter the password and press Enter or click Connect.
+
+### Key Auth
+1. Add an identity with your private key in the Hosts tab
+2. Link the identity to your host
+3. When connecting, leave password empty to use key-only auth
+
+**Troubleshooting Key Auth:**
+If key auth fails but `ssh -vv user@host` works from command line, the vault contains a different key than your `~/.ssh/id_*` file. Import the correct key into the vault.
+
+## Known Issues
+
+### Windows
+- **xterm focus errors**: `PlatformException: view ID is null` errors appear in debug console but don't block functionality. This is a known xterm/Flutter Windows issue.
+
+See `TODO.md` for full list of known issues and planned features.

@@ -577,6 +577,7 @@ class TerminalPanelState extends State<TerminalPanel>
       },
     );
 
+    controller.dispose();
     // Return empty string (not null) to indicate "use key auth"
     return result;
   }
