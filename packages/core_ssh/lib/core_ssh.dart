@@ -263,16 +263,25 @@ Future<SshClientAdapter> _defaultClientFactory(
   final socket = await SSHSocket.connect(target.host, target.port);
   final identities = <SSHKeyPair>[];
   if (target.privateKey != null && target.privateKey!.isNotEmpty) {
-    identities.addAll(
-      SSHKeyPair.fromPem(target.privateKey!, target.passphrase),
-    );
+    try {
+      identities.addAll(
+        SSHKeyPair.fromPem(target.privateKey!, target.passphrase),
+      );
+      log('Loaded ${identities.length} key(s) from private key');
+    } catch (e) {
+      log('Failed to parse private key: $e');
+      // Continue without key auth - will fall back to password if available
+    }
   }
+
+  final hasPassword = target.password != null && target.password!.isNotEmpty;
+  log('Auth methods: key=${identities.isNotEmpty}, password=$hasPassword');
+
   final client = SSHClient(
     socket,
     username: target.username,
     identities: identities.isEmpty ? null : identities,
-    onPasswordRequest:
-        target.password != null ? () async => target.password : null,
+    onPasswordRequest: hasPassword ? () async => target.password! : null,
     keepAliveInterval: target.keepAliveInterval,
     printDebug: (msg) => log(msg ?? ''),
     onVerifyHostKey: target.onHostKeyVerify == null
