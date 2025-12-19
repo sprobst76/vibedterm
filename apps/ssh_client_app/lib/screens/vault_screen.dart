@@ -178,11 +178,17 @@ class VaultScreen extends StatelessWidget {
     required String title,
   }) async {
     final controller = TextEditingController();
+    final focusNode = FocusNode();
     var rememberSession = false;
     var rememberSecure = false;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) {
+        // Request focus after dialog is built
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          focusNode.requestFocus();
+        });
+
         return AlertDialog(
           title: Text(title),
           content: StatefulBuilder(
@@ -192,8 +198,11 @@ class VaultScreen extends StatelessWidget {
                 children: [
                   TextField(
                     controller: controller,
+                    focusNode: focusNode,
                     decoration: const InputDecoration(labelText: 'Password'),
                     obscureText: true,
+                    autofocus: true,
+                    onSubmitted: (_) => Navigator.of(context).pop(true),
                   ),
                   Row(
                     children: [
@@ -238,6 +247,7 @@ class VaultScreen extends StatelessWidget {
         );
       },
     );
+    focusNode.dispose();
     if (ok != true) return null;
     return PasswordPromptResult(
       controller.text,

@@ -494,49 +494,62 @@ class TerminalPanelState extends State<TerminalPanel>
 
   Future<String?> _promptForPassword(VaultHost host, {bool hasKey = false}) async {
     final controller = TextEditingController();
+    final focusNode = FocusNode();
+
     final result = await showDialog<String?>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('SSH Authentication'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${host.username}@${host.hostname}:${host.port}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                hintText: hasKey ? 'Leave empty for key auth' : null,
-                border: const OutlineInputBorder(),
+      builder: (context) {
+        // Request focus after dialog is built
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          focusNode.requestFocus();
+        });
+
+        return AlertDialog(
+          title: const Text('SSH Authentication'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${host.username}@${host.hostname}:${host.port}'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                focusNode: focusNode,
+                obscureText: true,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  hintText: hasKey ? 'Leave empty for key auth' : null,
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => Navigator.pop(context, controller.text),
               ),
-              onSubmitted: (value) => Navigator.pop(context, value),
-            ),
-            if (hasKey) ...[
-              const SizedBox(height: 8),
-              Text(
-                'A private key is configured. Leave empty to use key authentication.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              if (hasKey) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'A private key is configured. Leave empty to use key authentication.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('Connect'),
+            ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Connect'),
-          ),
-        ],
-      ),
+        );
+      },
     );
+
     controller.dispose();
+    focusNode.dispose();
     // Return empty string (not null) to indicate "use key auth"
     return result;
   }
@@ -878,14 +891,20 @@ class _ConnectionTab {
     _onStatusChange?.call();
     bridge.write('Connecting to ${host.hostname}:${host.port}...\r\n');
 
-    // Debug logging
+    // Debug logging - also print to console
     final key = identity?.privateKey ?? '';
     final keyPreview = key.isNotEmpty
-        ? '${key.substring(0, key.length.clamp(0, 40))}...'
+        ? '${key.substring(0, key.length.clamp(0, 50))}...'
         : '(no key)';
+    // ignore: avoid_print
+    print('[SSH-DEBUG] User: ${host.username}');
+    // ignore: avoid_print
+    print('[SSH-DEBUG] Host: ${host.hostname}:${host.port}');
+    // ignore: avoid_print
+    print('[SSH-DEBUG] Key: $keyPreview');
+    // ignore: avoid_print
+    print('[SSH-DEBUG] Password provided: ${password?.isNotEmpty == true}');
     _addLog('Connecting: ${host.username}@${host.hostname}:${host.port}');
-    _addLog('Key: $keyPreview');
-    _addLog('Password provided: ${password?.isNotEmpty == true}');
 
     try {
       await manager.connect(

@@ -70,6 +70,13 @@ class VaultService {
     _savedPassword = await _secureStorage.read(key: _lastPasswordKey);
     if (_lastPath != null) {
       state.value = state.value.copyWith(filePath: _lastPath);
+      // Auto-unlock if password is saved
+      if (_savedPassword != null && _savedPassword!.isNotEmpty) {
+        final file = File(_lastPath!);
+        if (await file.exists()) {
+          await unlockVault(path: _lastPath!);
+        }
+      }
     }
   }
 
