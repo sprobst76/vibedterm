@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:core_vault/core_vault.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/vault_service.dart';
 
@@ -249,6 +253,59 @@ class HostsScreen extends StatelessWidget {
                 ),
                 maxLines: 4,
               ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: () async {
+                      try {
+                        final result = await FilePicker.platform.pickFiles(
+                          dialogTitle: 'Select private key file',
+                          allowMultiple: false,
+                        );
+                        final path = result?.files.single.path;
+                        if (path == null) return;
+                        final file = File(path);
+                        final content = await file.readAsString();
+                        keyController.text = content;
+                        if (ScaffoldMessenger.maybeOf(context) != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Loaded key from file')),
+                          );
+                        }
+                      } catch (e) {
+                        if (ScaffoldMessenger.maybeOf(context) != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to load key: $e')),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.folder_open),
+                    label: const Text('Load key from file'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final data =
+                          await Clipboard.getData(Clipboard.kTextPlain);
+                      final text = data?.text ?? '';
+                      if (text.isNotEmpty) {
+                        keyController.text = text;
+                        if (ScaffoldMessenger.maybeOf(context) != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Pasted key from clipboard')),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.paste),
+                    label: const Text('Paste'),
+                  ),
+                ],
+              ),
             ],
           ),
           actions: [
@@ -285,7 +342,8 @@ class HostsScreen extends StatelessWidget {
 
   void _connectHost(VaultHost host) {
     VaultIdentity? identity;
-    for (final id in service.currentData?.identities ?? const <VaultIdentity>[]) {
+    for (final id
+        in service.currentData?.identities ?? const <VaultIdentity>[]) {
       if (id.id == host.identityId) {
         identity = id;
         break;

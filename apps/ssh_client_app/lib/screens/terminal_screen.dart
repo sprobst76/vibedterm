@@ -121,7 +121,8 @@ class TerminalPanelState extends State<TerminalPanel>
               PopupMenuItem(
                 value: 'logs',
                 child: ListTile(
-                  leading: Icon(_showLogs ? Icons.visibility_off : Icons.visibility),
+                  leading:
+                      Icon(_showLogs ? Icons.visibility_off : Icons.visibility),
                   title: Text(_showLogs ? 'Hide logs' : 'Show logs'),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -175,12 +176,7 @@ class TerminalPanelState extends State<TerminalPanel>
     }
     return TabBarView(
       controller: _tabController,
-      children: _tabs
-          .map((t) => VibedTerminalView(
-                bridge: t.bridge,
-                focusNode: t.focusNode,
-              ))
-          .toList(),
+      children: _tabs.map((t) => VibedTerminalView(bridge: t.bridge)).toList(),
     );
   }
 
@@ -276,10 +272,18 @@ class TerminalPanelState extends State<TerminalPanel>
           ] else ...[
             const Expanded(child: SizedBox.shrink()),
           ],
-          _KeyButton(label: 'Esc', onPressed: hasSession ? () => _sendKey('\x1b') : null),
-          _KeyButton(label: 'Ctrl+C', onPressed: hasSession ? () => _sendKey('\x03') : null),
-          _KeyButton(label: 'Ctrl+D', onPressed: hasSession ? () => _sendKey('\x04') : null),
-          _KeyButton(label: 'Tab', onPressed: hasSession ? () => _sendKey('\t') : null),
+          _KeyButton(
+              label: 'Esc',
+              onPressed: hasSession ? () => _sendKey('\x1b') : null),
+          _KeyButton(
+              label: 'Ctrl+C',
+              onPressed: hasSession ? () => _sendKey('\x03') : null),
+          _KeyButton(
+              label: 'Ctrl+D',
+              onPressed: hasSession ? () => _sendKey('\x04') : null),
+          _KeyButton(
+              label: 'Tab',
+              onPressed: hasSession ? () => _sendKey('\t') : null),
           IconButton(
             icon: const Icon(Icons.content_paste, size: 18),
             tooltip: 'Paste',
@@ -287,7 +291,8 @@ class TerminalPanelState extends State<TerminalPanel>
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
-            icon: Icon(_showLogs ? Icons.expand_more : Icons.expand_less, size: 18),
+            icon: Icon(_showLogs ? Icons.expand_more : Icons.expand_less,
+                size: 18),
             tooltip: _showLogs ? 'Hide logs' : 'Show logs',
             onPressed: () => setState(() => _showLogs = !_showLogs),
             visualDensity: VisualDensity.compact,
@@ -318,13 +323,42 @@ class TerminalPanelState extends State<TerminalPanel>
               itemCount: tab.logs.length,
               itemBuilder: (context, index) {
                 final entry = tab.logs[tab.logs.length - 1 - index];
-                return Text(
-                  entry,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                return Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                  child: SelectableText(
+                    entry,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: _logColor(entry),
+                    ),
+                  ),
                 );
               },
             ),
     );
+  }
+
+  Color _logColor(String entry) {
+    final lower = entry.toLowerCase();
+    if (lower.contains('error') ||
+        lower.contains('failed') ||
+        lower.contains('exception')) {
+      return Colors.red;
+    }
+    if (lower.contains('authenticated') ||
+        lower.contains('auth success') ||
+        lower.contains('success') ||
+        lower.contains('connected')) {
+      return Colors.green[700]!;
+    }
+    if (lower.contains('warning') ||
+        lower.contains('warn') ||
+        lower.contains('mismatch')) {
+      return Colors.amber[800]!;
+    }
+    return Colors.blue[700]!;
   }
 
   void _handleMenuAction(String action) {
@@ -365,7 +399,8 @@ class TerminalPanelState extends State<TerminalPanel>
         .firstOrNull;
 
     // Always prompt for password (can be empty if using key auth)
-    final password = await _promptForPassword(host, hasKey: identity?.privateKey.isNotEmpty == true);
+    final password = await _promptForPassword(host,
+        hasKey: identity?.privateKey.isNotEmpty == true);
     if (password == null) return; // User cancelled
 
     // Create new tab
@@ -492,7 +527,8 @@ class TerminalPanelState extends State<TerminalPanel>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<String?> _promptForPassword(VaultHost host, {bool hasKey = false}) async {
+  Future<String?> _promptForPassword(VaultHost host,
+      {bool hasKey = false}) async {
     final controller = TextEditingController();
 
     final result = await showDialog<String?>(
@@ -510,7 +546,7 @@ class TerminalPanelState extends State<TerminalPanel>
               TextField(
                 controller: controller,
                 obscureText: true,
-                autofocus: true,
+                autofocus: false,
                 decoration: InputDecoration(
                   labelText: 'Password',
                   hintText: hasKey ? 'Leave empty for key auth' : null,
@@ -541,7 +577,6 @@ class TerminalPanelState extends State<TerminalPanel>
       },
     );
 
-    controller.dispose();
     // Return empty string (not null) to indicate "use key auth"
     return result;
   }
@@ -769,13 +804,13 @@ class _HostPickerSheet extends StatelessWidget {
             itemCount: hosts.length,
             itemBuilder: (context, index) {
               final host = hosts[index];
-              final identity = identities
-                  .where((i) => i.id == host.identityId)
-                  .firstOrNull;
+              final identity =
+                  identities.where((i) => i.id == host.identityId).firstOrNull;
               return ListTile(
                 leading: const Icon(Icons.dns),
                 title: Text(host.label),
-                subtitle: Text('${host.username}@${host.hostname}:${host.port}'),
+                subtitle:
+                    Text('${host.username}@${host.hostname}:${host.port}'),
                 trailing: identity != null
                     ? Chip(
                         label: Text(
@@ -877,7 +912,8 @@ class _ConnectionTab {
 
   Future<void> connect({
     required Map<String, Set<String>> trustedKeys,
-    required Future<bool> Function(String host, String type, String fp) onHostKeyPrompt,
+    required Future<bool> Function(String host, String type, String fp)
+        onHostKeyPrompt,
   }) async {
     status = TabConnectionStatus.connecting;
     _onStatusChange?.call();

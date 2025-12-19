@@ -57,7 +57,7 @@ class TerminalBridge {
 }
 
 /// Terminal widget built on xterm.
-class VibedTerminalView extends StatelessWidget {
+class VibedTerminalView extends StatefulWidget {
   const VibedTerminalView({
     super.key,
     required this.bridge,
@@ -70,12 +70,66 @@ class VibedTerminalView extends StatelessWidget {
   final bool autofocus;
 
   @override
+  State<VibedTerminalView> createState() => _VibedTerminalViewState();
+}
+
+class _VibedTerminalViewState extends State<VibedTerminalView> {
+  FocusNode? _internalFocusNode;
+  bool _activated = false;
+
+  FocusNode? get _effectiveFocusNode => widget.focusNode ?? _internalFocusNode;
+
+  @override
+  void dispose() {
+    // Only dispose focus node if we created it here.
+    if (_internalFocusNode != null) {
+      _internalFocusNode!.dispose();
+    }
+    super.dispose();
+  }
+
+  void _activateFocus() {
+    if (_activated) return;
+    if (widget.focusNode != null) {
+      // external focus node provided, just request focus on it
+      widget.focusNode!.requestFocus();
+      _activated = true;
+      return;
+    }
+    // create internal focus node and rebuild to attach it to TerminalView
+    _internalFocusNode = FocusNode();
+    _activated = true;
+    setState(() {});
+    // request focus in a post frame callback
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        try {
+          _internalFocusNode!.requestFocus();
+        } catch (_) {}
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // If no focus node is attached yet, wrap in GestureDetector to enable onTap activation.
+    if (_effectiveFocusNode == null) {
+      return GestureDetector(
+        onTap: _activateFocus,
+        child: TerminalView(
+          widget.bridge.terminal,
+          backgroundOpacity: 0.95,
+          autofocus: false,
+          padding: const EdgeInsets.all(8),
+        ),
+      );
+    }
+
     return TerminalView(
-      bridge.terminal,
+      widget.bridge.terminal,
       backgroundOpacity: 0.95,
-      autofocus: autofocus,
-      focusNode: focusNode,
+      autofocus: widget.autofocus,
+      focusNode: _effectiveFocusNode,
       padding: const EdgeInsets.all(8),
     );
   }
