@@ -1491,6 +1491,10 @@ class _TerminalPanelState extends State<TerminalPanel> {
   }
 
   void _addLog(String msg) {
+    // Also write to console for CLI debugging (e.g. `flutter run` output).
+    // Do not await here to keep UI responsive.
+    // ignore: avoid_print
+    print('[SSH] $msg');
     setState(() {
       final updated = [..._logs, msg];
       _logs = updated.length > 200 ? updated.sublist(updated.length - 200) : updated;
