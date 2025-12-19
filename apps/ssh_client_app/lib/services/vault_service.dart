@@ -378,9 +378,14 @@ class VaultService {
     );
   }
 
-  void setPendingConnectHost(VaultHost host, {VaultIdentity? identity}) {
+  void setPendingConnectHost(VaultHost? host, {VaultIdentity? identity}) {
     _pendingConnectHost = host;
     _pendingConnectIdentity = identity;
+  }
+
+  void clearPendingConnect() {
+    _pendingConnectHost = null;
+    _pendingConnectIdentity = null;
   }
 
   VaultHost? get pendingConnectHost => _pendingConnectHost;
