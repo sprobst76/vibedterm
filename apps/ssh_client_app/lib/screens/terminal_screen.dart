@@ -176,7 +176,14 @@ class TerminalPanelState extends State<TerminalPanel>
     }
     return TabBarView(
       controller: _tabController,
-      children: _tabs.map((t) => VibedTerminalView(bridge: t.bridge)).toList(),
+      children: _tabs
+          .map(
+            (t) => VibedTerminalView(
+              bridge: t.bridge,
+              focusNode: t.focusNode,
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -953,6 +960,10 @@ class _ConnectionTab {
         ),
       );
 
+      // Mark connected so shell startup does not skip input wiring.
+      status = TabConnectionStatus.connected;
+      _onStatusChange?.call();
+
       _addLog('Connected, opening shell...');
       bridge.write('Connected. Opening shell...\r\n');
 
@@ -982,7 +993,6 @@ class _ConnectionTab {
   }
 
   Future<void> _startShell() async {
-    if (status != TabConnectionStatus.connected) return;
     if (session != null) return;
 
     bridge.terminal.buffer.clear();

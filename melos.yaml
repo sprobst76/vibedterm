@@ -13,5 +13,5 @@ scripts:
   format: melos exec -- flutter format .
   check: |
     melos analyze
-    melos exec --dir="packages/core_vault" -- flutter test
-    melos exec --dir="packages/core_ssh" -- flutter test
+    melos exec --scope="core_vault" -- flutter test
+    melos exec --scope="core_ssh" -- flutter test
