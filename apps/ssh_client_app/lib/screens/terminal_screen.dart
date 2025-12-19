@@ -494,17 +494,11 @@ class TerminalPanelState extends State<TerminalPanel>
 
   Future<String?> _promptForPassword(VaultHost host, {bool hasKey = false}) async {
     final controller = TextEditingController();
-    final focusNode = FocusNode();
 
     final result = await showDialog<String?>(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        // Request focus after dialog is built
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          focusNode.requestFocus();
-        });
-
         return AlertDialog(
           title: const Text('SSH Authentication'),
           content: Column(
@@ -515,7 +509,6 @@ class TerminalPanelState extends State<TerminalPanel>
               const SizedBox(height: 16),
               TextField(
                 controller: controller,
-                focusNode: focusNode,
                 obscureText: true,
                 autofocus: true,
                 decoration: InputDecoration(
@@ -549,7 +542,6 @@ class TerminalPanelState extends State<TerminalPanel>
     );
 
     controller.dispose();
-    focusNode.dispose();
     // Return empty string (not null) to indicate "use key auth"
     return result;
   }
