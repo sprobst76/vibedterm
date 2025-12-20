@@ -70,7 +70,8 @@ class _TerminalPageState extends State<TerminalPage> {
 
   void _handleRawKey(RawKeyEvent event) {
     if (event is! RawKeyDownEvent) return;
-    _debug('RawKeyEvent: runtimeType=${event.runtimeType}, logical=${event.logicalKey.debugName}, keyId=${event.logicalKey.keyId}, char=${event.character}, ctrl=${event.isControlPressed}, alt=${event.isAltPressed}, meta=${event.isMetaPressed}');
+    _debug(
+        'RawKeyEvent: runtimeType=${event.runtimeType}, logical=${event.logicalKey.debugName}, keyId=${event.logicalKey.keyId}, char=${event.character}, ctrl=${event.isControlPressed}, alt=${event.isAltPressed}, meta=${event.isMetaPressed}');
 
     // Handle common control sequences
     // Ctrl+C
@@ -101,7 +102,8 @@ class _TerminalPageState extends State<TerminalPage> {
         _shellSession!.writeString('\x7f');
       } else {
         if (_currentBuffer.isNotEmpty) {
-          _currentBuffer = _currentBuffer.substring(0, _currentBuffer.length - 1);
+          _currentBuffer =
+              _currentBuffer.substring(0, _currentBuffer.length - 1);
           // simple visual backspace
           _terminal.write('\b \b');
         }
@@ -235,15 +237,20 @@ class _TerminalPageState extends State<TerminalPage> {
       final host = js['host'] as String?;
       final port = js['port'] as int? ?? 22;
       final username = js['username'] as String?;
-      final password = (js['password'] as String?)?.isEmpty ?? true ? null : js['password'] as String?;
+      final password = (js['password'] as String?)?.isEmpty ?? true
+          ? null
+          : js['password'] as String?;
       String? privateKey;
-      if (js['privateKeyFile'] != null && (js['privateKeyFile'] as String).isNotEmpty) {
+      if (js['privateKeyFile'] != null &&
+          (js['privateKeyFile'] as String).isNotEmpty) {
         final pkf = File(js['privateKeyFile'] as String);
         if (pkf.existsSync()) {
           privateKey = pkf.readAsStringSync();
         }
       }
-      final keepAlive = js['keepAliveSeconds'] is int ? Duration(seconds: js['keepAliveSeconds'] as int) : const Duration(seconds: 10);
+      final keepAlive = js['keepAliveSeconds'] is int
+          ? Duration(seconds: js['keepAliveSeconds'] as int)
+          : const Duration(seconds: 10);
 
       if (host == null || username == null) {
         _terminal.write('Invalid config.json: host/username required\r\n');
@@ -256,13 +263,13 @@ class _TerminalPageState extends State<TerminalPage> {
       _connManager = SshConnectionManager();
       try {
         await _connManager!.connect(SshTarget(
-        host: host,
-        port: port,
-        username: username,
-        password: password,
-        privateKey: privateKey,
-        passphrase: js['passphrase'] as String?,
-        keepAliveInterval: keepAlive,
+          host: host,
+          port: port,
+          username: username,
+          password: password,
+          privateKey: privateKey,
+          passphrase: js['passphrase'] as String?,
+          keepAliveInterval: keepAlive,
         ));
       } catch (e, st) {
         _terminal.write('SSH connect failed: $e\r\n');
@@ -271,7 +278,8 @@ class _TerminalPageState extends State<TerminalPage> {
       }
       _terminal.write('Connected, starting shell...\r\n');
       _debug('connected — starting shell');
-      _shellSession = await _connManager!.startShell(ptyConfig: SshPtyConfig(width: 80, height: 24));
+      _shellSession = await _connManager!
+          .startShell(ptyConfig: SshPtyConfig(width: 80, height: 24));
 
       _shellSession!.stdout.listen((data) {
         _debug('stdout chunk length=${data.length}');
@@ -324,7 +332,8 @@ class _TerminalPageState extends State<TerminalPage> {
                 onPointerDown: (event) async {
                   // Middle-click paste (typical X11 behaviour)
                   try {
-                    if (event.kind == PointerDeviceKind.mouse && event.buttons == kMiddleMouseButton) {
+                    if (event.kind == PointerDeviceKind.mouse &&
+                        event.buttons == kMiddleMouseButton) {
                       _debug('middle-click detected: pasting from clipboard');
                       final data = await Clipboard.getData('text/plain');
                       final text = data?.text ?? '';
@@ -363,11 +372,13 @@ class _TerminalPageState extends State<TerminalPage> {
                             dynamic val;
                             try {
                               // property access
-                              val = (t as dynamic).noSuchMethod(Invocation.getter(Symbol(name)));
+                              val = (t as dynamic).noSuchMethod(
+                                  Invocation.getter(Symbol(name)));
                             } catch (_) {
                               try {
                                 // method call
-                                val = (t as dynamic).noSuchMethod(Invocation.method(Symbol(name), []));
+                                val = (t as dynamic).noSuchMethod(
+                                    Invocation.method(Symbol(name), []));
                               } catch (_) {
                                 val = null;
                               }
@@ -404,48 +415,60 @@ class _TerminalPageState extends State<TerminalPage> {
                       } catch (e) {
                         _debug('selection reflection attempts failed: $e');
                       }
-                        // If still no selection found, log inspection of terminal/buffer
-                        if (selected == null || selected.isEmpty) {
+                      // If still no selection found, log inspection of terminal/buffer
+                      if (selected == null || selected.isEmpty) {
+                        try {
+                          final t = _terminal as dynamic;
+                          _debug('terminal.runtimeType=${t.runtimeType}');
                           try {
-                            final t = _terminal as dynamic;
-                            _debug('terminal.runtimeType=${t.runtimeType}');
+                            final buf = t.buffer as dynamic;
+                            _debug('buffer.runtimeType=${buf.runtimeType}');
                             try {
-                              final buf = t.buffer as dynamic;
-                              _debug('buffer.runtimeType=${buf.runtimeType}');
+                              final vw = t.viewWidth;
+                              final vh = t.viewHeight;
+                              _debug('viewWidth=$vw viewHeight=$vh');
+                            } catch (_) {}
+                            // Try some common buffer accessors
+                            final candidates = <String>[
+                              'lines',
+                              'length',
+                              'rows',
+                              'getLine',
+                              'getRow',
+                              'getRowText',
+                              'toString'
+                            ];
+                            for (final name in candidates) {
                               try {
-                                final vw = t.viewWidth;
-                                final vh = t.viewHeight;
-                                _debug('viewWidth=$vw viewHeight=$vh');
-                              } catch (_) {}
-                              // Try some common buffer accessors
-                              final candidates = <String>['lines', 'length', 'rows', 'getLine', 'getRow', 'getRowText', 'toString'];
-                              for (final name in candidates) {
+                                dynamic val;
                                 try {
-                                  dynamic val;
+                                  val = (buf as dynamic).noSuchMethod(
+                                      Invocation.getter(Symbol(name)));
+                                } catch (_) {
                                   try {
-                                    val = (buf as dynamic).noSuchMethod(Invocation.getter(Symbol(name)));
+                                    val = (buf as dynamic).noSuchMethod(
+                                        Invocation.method(Symbol(name), [0]));
                                   } catch (_) {
-                                    try {
-                                      val = (buf as dynamic).noSuchMethod(Invocation.method(Symbol(name), [0]));
-                                    } catch (_) {
-                                      val = null;
-                                    }
+                                    val = null;
                                   }
-                                  if (val != null) {
-                                    _debug('buffer has $name -> ${val.runtimeType}');
-                                  }
-                                } catch (_) {}
-                              }
-                            } catch (e) {
-                              _debug('buffer inspection failed: $e');
+                                }
+                                if (val != null) {
+                                  _debug(
+                                      'buffer has $name -> ${val.runtimeType}');
+                                }
+                              } catch (_) {}
                             }
                           } catch (e) {
-                            _debug('terminal inspection failed: $e');
+                            _debug('buffer inspection failed: $e');
                           }
+                        } catch (e) {
+                          _debug('terminal inspection failed: $e');
                         }
+                      }
                       if (selected != null && selected.isNotEmpty) {
                         await Clipboard.setData(ClipboardData(text: selected));
-                        _debug('copied selection length=${selected.length} to clipboard');
+                        _debug(
+                            'copied selection length=${selected.length} to clipboard');
                       }
                     }
                   } catch (e) {
