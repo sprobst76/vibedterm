@@ -1,0 +1,17 @@
+name: minimal_terminal_app
+description: Minimal Flutter app to reproduce terminal input/IME behavior
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  xterm: ^4.0.0
+  core_ssh:
+    path: ../../packages/core_ssh
+
+flutter:
+  uses-material-design: true
