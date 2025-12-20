@@ -444,6 +444,8 @@ class TerminalPanelState extends State<TerminalPanel>
       // Delay focus to avoid Windows platform exception
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
+          // ignore: avoid_print
+          print('[TAB-DEBUG] requesting tab focus for tab ${tab.id}');
           tab.focusNode.requestFocus();
         }
       });
@@ -553,7 +555,7 @@ class TerminalPanelState extends State<TerminalPanel>
               TextField(
                 controller: controller,
                 obscureText: true,
-                autofocus: false,
+                autofocus: true,
                 decoration: InputDecoration(
                   labelText: 'Password',
                   hintText: hasKey ? 'Leave empty for key auth' : null,
@@ -584,8 +586,10 @@ class TerminalPanelState extends State<TerminalPanel>
       },
     );
 
-    controller.dispose();
-    // Return empty string (not null) to indicate "use key auth"
+    // Do not dispose the controller here: disposing it after the dialog
+    // can race with the TextField still being used by the framework
+    // (causes "A TextEditingController was used after being disposed").
+    // Let the controller be reclaimed by GC once out of scope.
     return result;
   }
 

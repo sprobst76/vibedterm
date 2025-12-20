@@ -147,6 +147,7 @@ class HostsScreen extends StatelessWidget {
               TextField(
                 controller: labelController,
                 decoration: const InputDecoration(labelText: 'Label'),
+                autofocus: true,
               ),
               TextField(
                 controller: hostController,
@@ -241,6 +242,7 @@ class HostsScreen extends StatelessWidget {
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(labelText: 'Name'),
+                autofocus: true,
               ),
               TextField(
                 controller: typeController,

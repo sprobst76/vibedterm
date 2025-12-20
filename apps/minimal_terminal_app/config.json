@@ -1,0 +1,9 @@
+{
+  "host": "192.168.0.144",
+  "port": 22,
+  "username": "spro",
+  "password": "22stPr10",
+  "privateKeyFile": "",
+  "passphrase": "",
+  "keepAliveSeconds": 10
+}

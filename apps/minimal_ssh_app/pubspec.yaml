@@ -1,0 +1,17 @@
+name: minimal_ssh_app
+description: Minimal SSH app to test core_ssh connectivity
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  core_ssh:
+    path: ../../packages/core_ssh
+  xterm: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -194,7 +194,7 @@ class VaultScreen extends StatelessWidget {
                     controller: controller,
                     decoration: const InputDecoration(labelText: 'Password'),
                     obscureText: true,
-                    autofocus: false,
+                    autofocus: true,
                     onSubmitted: (_) => Navigator.of(context).pop(true),
                   ),
                   Row(

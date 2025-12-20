@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:core_vault/core_vault.dart';
 import 'package:flutter/material.dart';
 
@@ -60,6 +62,51 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _vaultService.init();
+    _loadDefaultConfig();
+  }
+
+  void _loadDefaultConfig() async {
+    try {
+      final file = File('${Directory.current.path.replaceAll('\\', '/')}/apps/ssh_client_app/config.json');
+      if (!await file.exists()) return;
+      final raw = await file.readAsString();
+      final map = json.decode(raw) as Map<String, dynamic>;
+      final host = map['host'] as String?;
+      if (host == null || host.isEmpty) return;
+      final port = (map['port'] as num?)?.toInt() ?? 22;
+      final username = map['username'] as String? ?? '';
+      final password = (map['password'] as String?) ?? '';
+      final keyfile = (map['privateKeyFile'] as String?) ?? '';
+
+      // Build a VaultHost instance (not persisted) and request connection.
+      final vh = VaultHost(
+        id: 'cfg-default',
+        label: '${username}@${host}',
+        hostname: host,
+        port: port,
+        username: username,
+      );
+
+      VaultIdentity? identity;
+      if (keyfile.isNotEmpty) {
+        final kf = File(keyfile);
+        if (await kf.exists()) {
+          final pem = await kf.readAsString();
+          identity = VaultIdentity(
+            id: 'cfg-identity',
+            name: 'default',
+            type: 'ssh',
+            privateKey: pem,
+          );
+        }
+      }
+
+      // Trigger a pending connect and switch to Terminal tab.
+      _vaultService.setPendingConnectHost(vh, identity: identity);
+      _setIndex(2);
+    } catch (_) {
+      // ignore failures silently
+    }
   }
 
   @override
