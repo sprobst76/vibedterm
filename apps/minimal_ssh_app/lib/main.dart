@@ -52,7 +52,8 @@ class _SshPageState extends State<SshPage> {
 
   Future<void> _loadAndConnect() async {
     try {
-      final cfgFile = File('${Directory.current.path.replaceAll('\\', '/')}/apps/minimal_ssh_app/config.json');
+      final cfgFile = File(
+          '${Directory.current.path.replaceAll('\\', '/')}/apps/minimal_ssh_app/config.json');
       if (!await cfgFile.exists()) {
         _appendLine('config.json not found at ${cfgFile.path}');
         return;
@@ -118,7 +119,8 @@ class _SshPageState extends State<SshPage> {
       _terminal.write(s + '\r\n');
       // scroll later
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        if (_scroll.hasClients)
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
       });
     });
   }
@@ -237,12 +239,16 @@ class _SshPageState extends State<SshPage> {
                   Expanded(
                     child: TextField(
                       controller: _inputController,
-                      decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Type command...'),
+                      decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          hintText: 'Type command...'),
                       onSubmitted: (s) => _sendInput(s),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  ElevatedButton(onPressed: () => _sendInput(_inputController.text), child: const Text('Send')),
+                  ElevatedButton(
+                      onPressed: () => _sendInput(_inputController.text),
+                      child: const Text('Send')),
                 ],
               ),
             ),

@@ -67,7 +67,8 @@ class _HomeShellState extends State<HomeShell> {
 
   void _loadDefaultConfig() async {
     try {
-      final file = File('${Directory.current.path.replaceAll('\\', '/')}/apps/ssh_client_app/config.json');
+      final file = File(
+          '${Directory.current.path.replaceAll('\\', '/')}/apps/ssh_client_app/config.json');
       if (!await file.exists()) return;
       final raw = await file.readAsString();
       final map = json.decode(raw) as Map<String, dynamic>;
