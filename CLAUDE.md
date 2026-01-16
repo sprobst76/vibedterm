@@ -20,11 +20,19 @@ flutter test packages/core_ssh
 cd apps/ssh_client_app && flutter run -d <device>
 
 # Melos commands (monorepo orchestration)
+melos bootstrap            # Initial setup after clone
 melos run analyze          # Analyze all packages
 melos run check            # Analyze + run core package tests
 melos run test             # Run all tests
 melos run format           # Format all packages
 ```
+
+## CI/CD
+
+GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and all PRs:
+- Flutter setup (stable channel)
+- `melos bootstrap`
+- `melos run check` (analyze + core_vault & core_ssh tests)
 
 ## Architecture
 
@@ -146,3 +154,15 @@ PlatformException(Internal Consistency Error, Set editing state has been invoked
 - Each `_ConnectionTab` is self-contained with its own SSH connection lifecycle
 - Use `// ignore: avoid_print` for intentional debug prints
 - Password dialogs use `autofocus: true` and `onSubmitted` for Enter key support
+- All data models in core_vault are marked `@immutable`
+
+## Key Files
+
+When navigating this codebase, these are the most important files:
+
+- `melos.yaml` - Monorepo configuration and scripts
+- `packages/core_vault/lib/core_vault.dart` - Full vault implementation (~960 lines)
+- `packages/core_ssh/lib/core_ssh.dart` - SSH connection manager (~360 lines)
+- `packages/ui_terminal/lib/ui_terminal.dart` - Terminal bridge (~140 lines)
+- `apps/ssh_client_app/lib/screens/terminal_screen.dart` - Main terminal UI (~1050 lines)
+- `apps/ssh_client_app/lib/services/vault_service.dart` - State orchestration (~480 lines)

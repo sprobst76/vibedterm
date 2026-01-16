@@ -12,7 +12,7 @@ import '../services/vault_service.dart';
 class TerminalScreen extends StatelessWidget {
   const TerminalScreen({super.key, required this.service});
 
-  final VaultService service;
+  final VaultServiceInterface service;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +23,7 @@ class TerminalScreen extends StatelessWidget {
 class TerminalPanel extends StatefulWidget {
   const TerminalPanel({super.key, required this.service});
 
-  final VaultService service;
+  final VaultServiceInterface service;
 
   @override
   State<TerminalPanel> createState() => TerminalPanelState();

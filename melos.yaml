@@ -15,3 +15,4 @@ scripts:
     melos analyze
     melos exec --scope="core_vault" -- flutter test
     melos exec --scope="core_ssh" -- flutter test
+    melos exec --scope="ssh_client_app" -- flutter test

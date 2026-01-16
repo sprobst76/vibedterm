@@ -14,7 +14,7 @@ class HostsScreen extends StatelessWidget {
     required this.onConnectHost,
   });
 
-  final VaultService service;
+  final VaultServiceInterface service;
   final void Function(VaultHost host, VaultIdentity? identity) onConnectHost;
 
   @override

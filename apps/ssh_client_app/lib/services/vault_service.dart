@@ -6,39 +6,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
-enum VaultStatus { locked, unlocked, error }
+import 'vault_service_interface.dart';
 
-@immutable
-class VaultState {
-  const VaultState({
-    required this.status,
-    this.message = '',
-    this.filePath,
-    this.isBusy = false,
-  });
-
-  final VaultStatus status;
-  final String message;
-  final String? filePath;
-  final bool isBusy;
-
-  VaultState copyWith({
-    VaultStatus? status,
-    String? message,
-    String? filePath,
-    bool? isBusy,
-  }) {
-    return VaultState(
-      status: status ?? this.status,
-      message: message ?? this.message,
-      filePath: filePath ?? this.filePath,
-      isBusy: isBusy ?? this.isBusy,
-    );
-  }
-}
+export 'vault_service_interface.dart' show VaultStatus, VaultState, VaultServiceInterface;
 
 /// Minimal vault orchestrator for the demo screens.
-class VaultService {
+class VaultService implements VaultServiceInterface {
   VaultService();
 
   final _uuid = const Uuid();
@@ -52,18 +25,23 @@ class VaultService {
   VaultHost? _pendingConnectHost;
   VaultIdentity? _pendingConnectIdentity;
 
+  @override
   final ValueNotifier<VaultState> state = ValueNotifier<VaultState>(
     const VaultState(status: VaultStatus.locked),
   );
 
   VaultFile? _current;
 
+  @override
   bool get isUnlocked => _current != null;
+  @override
   String? get currentPath => _current?.file.path;
   String? _lastPath;
   String? _savedPassword;
+  @override
   String? get lastPath => _lastPath;
 
+  @override
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _lastPath = prefs.getString(_lastPathKey);
@@ -80,6 +58,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> createDemoVault() async {
     try {
       final dir = await Directory.systemTemp.createTemp('vibedterm_demo_');
@@ -124,6 +103,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> unlockDemoVault(String filePath) async {
     try {
       final file = File(filePath);
@@ -151,6 +131,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> createVault({
     required String path,
     required String password,
@@ -198,6 +179,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> unlockVault({
     required String path,
     String? password,
@@ -251,8 +233,10 @@ class VaultService {
     }
   }
 
+  @override
   VaultData? get currentData => _current?.payload.data;
 
+  @override
   Future<void> addHost({
     required String label,
     required String hostname,
@@ -293,6 +277,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> addIdentity({
     required String name,
     required String type,
@@ -331,6 +316,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> updateHost(VaultHost updated) async {
     if (_current == null) return;
     try {
@@ -348,6 +334,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> deleteHost(String hostId) async {
     if (_current == null) return;
     _current!.removeHost(hostId);
@@ -358,6 +345,7 @@ class VaultService {
     );
   }
 
+  @override
   Future<void> updateIdentity(VaultIdentity updated) async {
     if (_current == null) return;
     try {
@@ -375,6 +363,7 @@ class VaultService {
     }
   }
 
+  @override
   Future<void> deleteIdentity(String identityId) async {
     if (_current == null) return;
     _current!.removeIdentity(identityId);
@@ -385,19 +374,24 @@ class VaultService {
     );
   }
 
+  @override
   void setPendingConnectHost(VaultHost? host, {VaultIdentity? identity}) {
     _pendingConnectHost = host;
     _pendingConnectIdentity = identity;
   }
 
+  @override
   void clearPendingConnect() {
     _pendingConnectHost = null;
     _pendingConnectIdentity = null;
   }
 
+  @override
   VaultHost? get pendingConnectHost => _pendingConnectHost;
+  @override
   VaultIdentity? get pendingConnectIdentity => _pendingConnectIdentity;
 
+  @override
   Map<String, Set<String>> trustedHostKeys() {
     final meta = _current?.payload.data.meta ?? const <String, dynamic>{};
     final raw = meta['trustedHostKeys'];
@@ -412,6 +406,7 @@ class VaultService {
     return result;
   }
 
+  @override
   Future<void> trustHostKey({
     required String host,
     required String fingerprint,
@@ -442,6 +437,7 @@ class VaultService {
     );
   }
 
+  @override
   Future<void> untrustHostKey({
     required String host,
     required String fingerprint,
@@ -465,6 +461,7 @@ class VaultService {
     );
   }
 
+  @override
   Future<void> untrustHost(String host) async {
     if (_current == null) return;
     final meta = Map<String, dynamic>.from(_current!.payload.data.meta);

@@ -43,7 +43,7 @@
 
 ### Low Priority
 
-- Widget tests for screens.
+- ~~Widget tests for screens.~~ (Done: VaultScreen, HostsScreen, TerminalScreen - 47 tests)
 - Consider Riverpod/Bloc for state management as complexity grows.
 - SFTP file browser integration.
 - Session recording/playback.

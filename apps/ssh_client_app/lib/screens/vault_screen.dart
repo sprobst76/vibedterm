@@ -8,7 +8,7 @@ import '../services/vault_service.dart';
 class VaultScreen extends StatelessWidget {
   const VaultScreen({super.key, required this.service});
 
-  final VaultService service;
+  final VaultServiceInterface service;
 
   @override
   Widget build(BuildContext context) {
