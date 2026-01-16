@@ -130,7 +130,6 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
   bool _activated = false;
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
-  bool _wasComposing = false;
   OverlayEntry? _inputOverlay;
 
   FocusNode? get _effectiveFocusNode => widget.focusNode ?? _internalFocusNode;
@@ -213,41 +212,17 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
               enableInteractiveSelection: false,
               decoration: const InputDecoration.collapsed(hintText: ''),
               onSubmitted: (s) {
-                // When the IME/overlay field submits (Enter), forward CR to session.
-                if (widget.bridge.onOutput != null) {
-                  try {
-                    widget.bridge.onOutput!('\r');
-                  } catch (_) {}
-                } else {
-                  try {
-                    widget.bridge.write('\r');
-                  } catch (_) {}
-                }
+                // On platforms where the overlay works, Enter might come here.
+                // But we also handle it in _handleRawKey, so just clear.
                 _inputController.clear();
               },
-              // We handle changes and commit composed text here.
+              // Character input is handled by _handleRawKey to avoid double-sending.
+              // The overlay TextField exists mainly for IME support on mobile platforms.
+              // On Windows, _handleRawKey handles everything.
               onChanged: (s) {
-                final v = _inputController.value;
-                if (v.composing.isValid) {
-                  _wasComposing = true;
-                  return;
-                }
-                if (_wasComposing) {
-                  _wasComposing = false;
-                }
-                if (s.isNotEmpty) {
-                  final text = s;
-                  if (widget.bridge.onOutput != null) {
-                    try {
-                      widget.bridge.onOutput!(text);
-                    } catch (_) {}
-                  } else {
-                    try {
-                      widget.bridge.debugWrite(text);
-                    } catch (_) {}
-                  }
-                  _inputController.clear();
-                }
+                // Clear the controller to prevent accumulation, but don't send
+                // characters here - _handleRawKey already handles them.
+                _inputController.clear();
               },
             ),
           ),
@@ -333,8 +308,12 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
       return;
     }
 
-    // Do NOT send regular characters here - they come through the overlay TextField
-    // to avoid double-sending and to properly support IME/composed characters
+    // Send regular characters - the overlay TextField approach doesn't work
+    // reliably on Windows, so we handle all character input here.
+    final char = event.character;
+    if (char != null && char.isNotEmpty) {
+      sendToSession(char);
+    }
   }
 
   @override
