@@ -262,48 +262,49 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
 
   void _handleRawKey(RawKeyEvent event) {
     if (event is! RawKeyDownEvent) return;
+
+    // Helper to send data to SSH session or fall back to local echo
+    void sendToSession(String data) {
+      if (widget.bridge.onOutput != null) {
+        try {
+          widget.bridge.onOutput!(data);
+        } catch (_) {}
+      } else {
+        widget.bridge.debugWrite(data);
+      }
+    }
+
     if (event.logicalKey == LogicalKeyboardKey.enter) {
-      widget.bridge.write('\r');
+      sendToSession('\r');
       return;
     }
     if (event.logicalKey == LogicalKeyboardKey.backspace) {
-      widget.bridge.write('\x7f');
+      sendToSession('\x7f');
       return;
     }
     if (event.logicalKey == LogicalKeyboardKey.tab) {
-      widget.bridge.write('\t');
+      sendToSession('\t');
       return;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      widget.bridge.write('\x1b[A');
+      sendToSession('\x1b[A');
       return;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      widget.bridge.write('\x1b[B');
+      sendToSession('\x1b[B');
       return;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      widget.bridge.write('\x1b[C');
+      sendToSession('\x1b[C');
       return;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      widget.bridge.write('\x1b[D');
+      sendToSession('\x1b[D');
       return;
     }
     final char = event.character;
     if (char != null && char.isNotEmpty) {
-      // Prefer sending to the bridge output (connected session). If no
-      // session is attached (bridge.onOutput == null), fall back to
-      // writing directly to the terminal for local echo.
-      if (widget.bridge.onOutput != null) {
-        try {
-          widget.bridge.onOutput!(char);
-        } catch (_) {
-          // ignore errors from user-provided onOutput
-        }
-      } else {
-        widget.bridge.debugWrite(char);
-      }
+      sendToSession(char);
     }
   }
 
