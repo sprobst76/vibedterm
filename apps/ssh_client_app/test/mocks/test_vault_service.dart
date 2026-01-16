@@ -310,6 +310,28 @@ class TestVaultService implements VaultServiceInterface {
   }
 
   @override
+  Future<void> updateSettings(VaultSettings settings) async {
+    if (_currentData == null) return;
+    final now = DateTime.now().toUtc().toIso8601String();
+    _currentData = VaultData(
+      version: _currentData!.version,
+      revision: _currentData!.revision + 1,
+      deviceId: _currentData!.deviceId,
+      createdAt: _currentData!.createdAt,
+      updatedAt: now,
+      hosts: _currentData!.hosts,
+      identities: _currentData!.identities,
+      snippets: _currentData!.snippets,
+      settings: settings,
+      meta: _currentData!.meta,
+    );
+    state.value = state.value.copyWith(
+      status: VaultStatus.unlocked,
+      message: 'Settings updated.',
+    );
+  }
+
+  @override
   void setPendingConnectHost(VaultHost? host, {VaultIdentity? identity}) {
     _pendingConnectHost = host;
     _pendingConnectIdentity = identity;

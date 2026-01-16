@@ -252,16 +252,33 @@ class VaultSettings {
     this.theme = 'system',
     this.fontSize = 14,
     this.extraKeys = false,
+    this.terminalTheme = 'default',
+    this.terminalFontSize = 14.0,
+    this.terminalFontFamily = 'monospace',
+    this.terminalOpacity = 1.0,
+    this.terminalCursorStyle = 'block',
   });
 
-  final String theme; // e.g., system/light/dark
+  final String theme; // e.g., system/light/dark (app theme)
   final int fontSize;
   final bool extraKeys;
+
+  // Terminal-specific settings
+  final String terminalTheme; // e.g., default, solarized-dark, solarized-light, monokai, dracula
+  final double terminalFontSize;
+  final String terminalFontFamily; // e.g., monospace, Cascadia Code, Fira Code
+  final double terminalOpacity; // 0.0 - 1.0
+  final String terminalCursorStyle; // block, underline, bar
 
   Map<String, dynamic> toJson() => {
         'theme': theme,
         'fontSize': fontSize,
         'extraKeys': extraKeys,
+        'terminalTheme': terminalTheme,
+        'terminalFontSize': terminalFontSize,
+        'terminalFontFamily': terminalFontFamily,
+        'terminalOpacity': terminalOpacity,
+        'terminalCursorStyle': terminalCursorStyle,
       };
 
   factory VaultSettings.fromJson(Map<String, dynamic> json) {
@@ -269,6 +286,11 @@ class VaultSettings {
       theme: json['theme'] as String? ?? 'system',
       fontSize: (json['fontSize'] as int?) ?? 14,
       extraKeys: (json['extraKeys'] as bool?) ?? false,
+      terminalTheme: json['terminalTheme'] as String? ?? 'default',
+      terminalFontSize: (json['terminalFontSize'] as num?)?.toDouble() ?? 14.0,
+      terminalFontFamily: json['terminalFontFamily'] as String? ?? 'monospace',
+      terminalOpacity: (json['terminalOpacity'] as num?)?.toDouble() ?? 1.0,
+      terminalCursorStyle: json['terminalCursorStyle'] as String? ?? 'block',
     );
   }
 
@@ -278,11 +300,21 @@ class VaultSettings {
     String? theme,
     int? fontSize,
     bool? extraKeys,
+    String? terminalTheme,
+    double? terminalFontSize,
+    String? terminalFontFamily,
+    double? terminalOpacity,
+    String? terminalCursorStyle,
   }) {
     return VaultSettings(
       theme: theme ?? this.theme,
       fontSize: fontSize ?? this.fontSize,
       extraKeys: extraKeys ?? this.extraKeys,
+      terminalTheme: terminalTheme ?? this.terminalTheme,
+      terminalFontSize: terminalFontSize ?? this.terminalFontSize,
+      terminalFontFamily: terminalFontFamily ?? this.terminalFontFamily,
+      terminalOpacity: terminalOpacity ?? this.terminalOpacity,
+      terminalCursorStyle: terminalCursorStyle ?? this.terminalCursorStyle,
     );
   }
 
@@ -291,11 +323,24 @@ class VaultSettings {
     return other is VaultSettings &&
         theme == other.theme &&
         fontSize == other.fontSize &&
-        extraKeys == other.extraKeys;
+        extraKeys == other.extraKeys &&
+        terminalTheme == other.terminalTheme &&
+        terminalFontSize == other.terminalFontSize &&
+        terminalFontFamily == other.terminalFontFamily &&
+        terminalOpacity == other.terminalOpacity &&
+        terminalCursorStyle == other.terminalCursorStyle;
   }
 
   @override
-  int get hashCode => theme.hashCode ^ fontSize.hashCode ^ extraKeys.hashCode;
+  int get hashCode =>
+      theme.hashCode ^
+      fontSize.hashCode ^
+      extraKeys.hashCode ^
+      terminalTheme.hashCode ^
+      terminalFontSize.hashCode ^
+      terminalFontFamily.hashCode ^
+      terminalOpacity.hashCode ^
+      terminalCursorStyle.hashCode;
 }
 
 /// Handles version upgrades of vault payloads.
@@ -749,6 +794,18 @@ class VaultFile {
     _setData(
       current.copyWith(
         meta: meta,
+        revision: current.revision + 1,
+        updatedAt: _nowIso(),
+      ),
+    );
+  }
+
+  /// Update vault settings and bump revision/updatedAt.
+  void updateSettings(VaultSettings settings) {
+    final current = _payload.data;
+    _setData(
+      current.copyWith(
+        settings: settings,
         revision: current.revision + 1,
         updatedAt: _nowIso(),
       ),

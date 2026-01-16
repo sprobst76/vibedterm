@@ -375,6 +375,30 @@ class VaultService implements VaultServiceInterface {
   }
 
   @override
+  Future<void> updateSettings(VaultSettings settings) async {
+    if (_current == null) {
+      state.value = state.value.copyWith(
+        status: VaultStatus.error,
+        message: 'Unlock a vault first.',
+      );
+      return;
+    }
+    try {
+      _current!.updateSettings(settings);
+      await _current!.save();
+      state.value = state.value.copyWith(
+        status: VaultStatus.unlocked,
+        message: 'Settings updated.',
+      );
+    } on VaultException catch (e) {
+      state.value = state.value.copyWith(
+        status: VaultStatus.error,
+        message: e.message,
+      );
+    }
+  }
+
+  @override
   void setPendingConnectHost(VaultHost? host, {VaultIdentity? identity}) {
     _pendingConnectHost = host;
     _pendingConnectIdentity = identity;

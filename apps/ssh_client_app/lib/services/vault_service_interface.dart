@@ -82,6 +82,7 @@ abstract class VaultServiceInterface {
   Future<void> deleteHost(String hostId);
   Future<void> updateIdentity(VaultIdentity updated);
   Future<void> deleteIdentity(String identityId);
+  Future<void> updateSettings(VaultSettings settings);
 
   void setPendingConnectHost(VaultHost? host, {VaultIdentity? identity});
   void clearPendingConnect();
