@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:core_vault/core_vault.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_terminal/ui_terminal.dart';
 
 import 'screens/screens.dart';
 import 'services/vault_service.dart';
@@ -10,32 +11,48 @@ void main() {
   runApp(const VibedTermApp());
 }
 
-class VibedTermApp extends StatelessWidget {
+class VibedTermApp extends StatefulWidget {
   const VibedTermApp({super.key});
 
   @override
+  State<VibedTermApp> createState() => _VibedTermAppState();
+}
+
+class _VibedTermAppState extends State<VibedTermApp> {
+  final _vaultService = VaultService();
+
+  @override
+  void initState() {
+    super.initState();
+    _vaultService.init();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'VibedTerm',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.system,
-      home: const HomeShell(),
+    return ValueListenableBuilder<VaultState>(
+      valueListenable: _vaultService.state,
+      builder: (context, state, _) {
+        // Get terminal theme from settings
+        final themeName = _vaultService.currentData?.settings.terminalTheme ?? 'default';
+        final terminalTheme = TerminalThemePresets.getTheme(themeName);
+        final appTheme = TerminalThemeConverter.toFlutterTheme(terminalTheme);
+
+        return MaterialApp(
+          title: 'VibedTerm',
+          theme: appTheme,
+          darkTheme: appTheme,
+          themeMode: ThemeMode.light, // Always use our custom theme
+          home: HomeShell(service: _vaultService),
+        );
+      },
     );
   }
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  const HomeShell({super.key, required this.service});
+
+  final VaultService service;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -43,8 +60,9 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
-  final _vaultService = VaultService();
   String? _lastMessage;
+
+  VaultService get _vaultService => widget.service;
 
   static const _pages = [
     _PageConfig('Vault', Icons.lock_outline),
@@ -61,7 +79,6 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    _vaultService.init();
     _loadDefaultConfig();
   }
 
