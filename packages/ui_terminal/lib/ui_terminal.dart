@@ -1,6 +1,7 @@
 library ui_terminal;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,10 +32,10 @@ class TerminalBridge {
   }) {
     _cancelSubscriptions();
     _subscriptions.add(
-      stdout.listen((data) => terminal.write(String.fromCharCodes(data))),
+      stdout.listen((data) => terminal.write(utf8.decode(data, allowMalformed: true))),
     );
     _subscriptions.add(
-      stderr.listen((data) => terminal.write(String.fromCharCodes(data))),
+      stderr.listen((data) => terminal.write(utf8.decode(data, allowMalformed: true))),
     );
   }
 
@@ -312,9 +313,6 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     // reliably on Windows, so we handle all character input here.
     final char = event.character;
     if (char != null && char.isNotEmpty) {
-      // Debug: log character info to understand dead key handling
-      // ignore: avoid_print
-      print('[KEY-DEBUG] char="${char}" codeUnits=${char.codeUnits} logicalKey=${event.logicalKey.keyLabel}');
       sendToSession(char);
     }
   }
