@@ -274,6 +274,8 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
       }
     }
 
+    // Only handle special keys here - regular characters are handled by the
+    // overlay TextField to properly support IME and composed characters (umlauts etc.)
     if (event.logicalKey == LogicalKeyboardKey.enter) {
       sendToSession('\r');
       return;
@@ -284,6 +286,10 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     }
     if (event.logicalKey == LogicalKeyboardKey.tab) {
       sendToSession('\t');
+      return;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      sendToSession('\x1b');
       return;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
@@ -302,10 +308,33 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
       sendToSession('\x1b[D');
       return;
     }
-    final char = event.character;
-    if (char != null && char.isNotEmpty) {
-      sendToSession(char);
+    if (event.logicalKey == LogicalKeyboardKey.home) {
+      sendToSession('\x1b[H');
+      return;
     }
+    if (event.logicalKey == LogicalKeyboardKey.end) {
+      sendToSession('\x1b[F');
+      return;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.pageUp) {
+      sendToSession('\x1b[5~');
+      return;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.pageDown) {
+      sendToSession('\x1b[6~');
+      return;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.delete) {
+      sendToSession('\x1b[3~');
+      return;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.insert) {
+      sendToSession('\x1b[2~');
+      return;
+    }
+
+    // Do NOT send regular characters here - they come through the overlay TextField
+    // to avoid double-sending and to properly support IME/composed characters
   }
 
   @override
