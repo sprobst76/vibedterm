@@ -67,46 +67,82 @@ class TerminalPanelState extends State<TerminalPanel>
     await _connectToHost(host, identity: identity);
   }
 
+  /// Get the current terminal theme for styling surrounding UI.
+  TerminalTheme get _currentTerminalTheme {
+    final themeName = widget.service.currentData?.settings.terminalTheme ?? 'default';
+    return TerminalThemePresets.getTheme(themeName);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildTabBar(),
-        Expanded(child: _buildTerminalArea()),
-        _buildStatusBar(),
-        if (_showLogs) _buildLogsDrawer(),
-      ],
+    final termTheme = _currentTerminalTheme;
+
+    return Container(
+      color: termTheme.background,
+      child: Column(
+        children: [
+          _buildTabBar(termTheme),
+          Expanded(child: _buildTerminalArea(termTheme)),
+          _buildStatusBar(termTheme),
+          if (_showLogs) _buildLogsDrawer(termTheme),
+        ],
+      ),
     );
   }
 
-  Widget _buildTabBar() {
-    final colorScheme = Theme.of(context).colorScheme;
+  Widget _buildTabBar(TerminalTheme termTheme) {
+    // Create a slightly lighter/darker shade for the tab bar
+    final tabBarColor = Color.lerp(termTheme.background, termTheme.foreground, 0.08)!;
+    final textColor = termTheme.foreground;
+    final iconColor = termTheme.foreground.withOpacity(0.8);
+
     return Container(
       height: 48,
-      color: colorScheme.surfaceContainerHighest,
+      decoration: BoxDecoration(
+        color: tabBarColor,
+        border: Border(
+          bottom: BorderSide(
+            color: termTheme.foreground.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
       child: Row(
         children: [
           Expanded(
             child: _tabs.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('No connections'),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'No connections',
+                      style: TextStyle(color: textColor.withOpacity(0.6)),
+                    ),
                   )
-                : TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    dividerColor: Colors.transparent,
-                    tabs: _tabs.map((t) => _buildTabLabel(t)).toList(),
+                : Theme(
+                    data: Theme.of(context).copyWith(
+                      tabBarTheme: TabBarThemeData(
+                        labelColor: textColor,
+                        unselectedLabelColor: textColor.withOpacity(0.6),
+                        indicatorColor: termTheme.cyan,
+                        dividerColor: Colors.transparent,
+                      ),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      dividerColor: Colors.transparent,
+                      tabs: _tabs.map((t) => _buildTabLabel(t, textColor)).toList(),
+                    ),
                   ),
           ),
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: Icon(Icons.add, color: iconColor),
             tooltip: 'New connection',
             onPressed: _showHostPicker,
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
+            icon: Icon(Icons.more_vert, color: iconColor),
             tooltip: 'More options',
             onSelected: _handleMenuAction,
             itemBuilder: (context) => [
@@ -143,7 +179,7 @@ class TerminalPanelState extends State<TerminalPanel>
     );
   }
 
-  Widget _buildTabLabel(_ConnectionTab tab) {
+  Widget _buildTabLabel(_ConnectionTab tab, Color textColor) {
     return Tab(
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -162,15 +198,16 @@ class TerminalPanelState extends State<TerminalPanel>
             child: Text(
               tab.label,
               overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: textColor),
             ),
           ),
           const SizedBox(width: 8),
           InkWell(
             borderRadius: BorderRadius.circular(12),
             onTap: () => _confirmCloseTab(tab),
-            child: const Padding(
-              padding: EdgeInsets.all(2),
-              child: Icon(Icons.close, size: 16),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(Icons.close, size: 16, color: textColor.withOpacity(0.7)),
             ),
           ),
         ],
@@ -178,26 +215,48 @@ class TerminalPanelState extends State<TerminalPanel>
     );
   }
 
-  Widget _buildTerminalArea() {
+  Widget _buildTerminalArea(TerminalTheme termTheme) {
     if (_tabs.isEmpty) {
-      return _buildEmptyState();
+      return _buildEmptyState(termTheme);
     }
     final settings = widget.service.currentData?.settings;
-    return TabBarView(
-      controller: _tabController,
-      children: _tabs
-          .map(
-            (t) => VibedTerminalView(
-              bridge: t.bridge,
-              focusNode: t.focusNode,
-              themeName: settings?.terminalTheme ?? 'default',
-              fontSize: settings?.terminalFontSize ?? 14.0,
-              fontFamily: settings?.terminalFontFamily,
-              opacity: settings?.terminalOpacity ?? 1.0,
-              cursorStyle: _parseCursorStyle(settings?.terminalCursorStyle),
-            ),
-          )
-          .toList(),
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: termTheme.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: termTheme.foreground.withOpacity(0.15),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(7),
+        child: TabBarView(
+          controller: _tabController,
+          children: _tabs
+              .map(
+                (t) => VibedTerminalView(
+                  bridge: t.bridge,
+                  focusNode: t.focusNode,
+                  themeName: settings?.terminalTheme ?? 'default',
+                  fontSize: settings?.terminalFontSize ?? 14.0,
+                  fontFamily: settings?.terminalFontFamily,
+                  opacity: settings?.terminalOpacity ?? 1.0,
+                  cursorStyle: _parseCursorStyle(settings?.terminalCursorStyle),
+                ),
+              )
+              .toList(),
+        ),
+      ),
     );
   }
 
@@ -213,8 +272,11 @@ class TerminalPanelState extends State<TerminalPanel>
     }
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(TerminalTheme termTheme) {
     final hosts = widget.service.currentData?.hosts ?? [];
+    final textColor = termTheme.foreground;
+    final dimColor = termTheme.foreground.withOpacity(0.6);
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -222,18 +284,22 @@ class TerminalPanelState extends State<TerminalPanel>
           Icon(
             Icons.terminal,
             size: 64,
-            color: Theme.of(context).colorScheme.outline,
+            color: termTheme.cyan.withOpacity(0.7),
           ),
           const SizedBox(height: 16),
           Text(
             'No active connections',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: textColor,
+            ),
           ),
           const SizedBox(height: 24),
           if (hosts.isNotEmpty) ...[
             Text(
               'Quick connect:',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: TextStyle(fontSize: 12, color: dimColor),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -242,8 +308,10 @@ class TerminalPanelState extends State<TerminalPanel>
               alignment: WrapAlignment.center,
               children: hosts.take(6).map((h) {
                 return ActionChip(
-                  avatar: const Icon(Icons.dns, size: 18),
-                  label: Text(h.label),
+                  avatar: Icon(Icons.dns, size: 18, color: termTheme.green),
+                  label: Text(h.label, style: TextStyle(color: textColor)),
+                  backgroundColor: termTheme.background,
+                  side: BorderSide(color: termTheme.foreground.withOpacity(0.3)),
                   onPressed: () => _connectToHost(h),
                 );
               }).toList(),
@@ -252,19 +320,28 @@ class TerminalPanelState extends State<TerminalPanel>
               const SizedBox(height: 8),
               TextButton(
                 onPressed: _showHostPicker,
-                child: Text('Show all ${hosts.length} hosts'),
+                child: Text(
+                  'Show all ${hosts.length} hosts',
+                  style: TextStyle(color: termTheme.cyan),
+                ),
               ),
             ],
           ] else ...[
-            const Text('No hosts configured yet.'),
+            Text(
+              'No hosts configured yet.',
+              style: TextStyle(color: dimColor),
+            ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () {
-                // Navigate to Hosts tab (index 1)
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Add hosts in the Hosts tab')),
                 );
               },
+              style: FilledButton.styleFrom(
+                backgroundColor: termTheme.cyan,
+                foregroundColor: termTheme.background,
+              ),
               icon: const Icon(Icons.add),
               label: const Text('Add a host'),
             ),
@@ -274,15 +351,25 @@ class TerminalPanelState extends State<TerminalPanel>
     );
   }
 
-  Widget _buildStatusBar() {
+  Widget _buildStatusBar(TerminalTheme termTheme) {
     final tab = _activeTab;
     final hasSession = tab?.session != null;
-    final colorScheme = Theme.of(context).colorScheme;
+    final statusBarColor = Color.lerp(termTheme.background, Colors.black, 0.15)!;
+    final textColor = termTheme.foreground;
+    final iconColor = termTheme.foreground.withOpacity(0.8);
 
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      color: colorScheme.surfaceContainerLow,
+      decoration: BoxDecoration(
+        color: statusBarColor,
+        border: Border(
+          top: BorderSide(
+            color: termTheme.foreground.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
       child: Row(
         children: [
           if (tab != null) ...[
@@ -298,7 +385,7 @@ class TerminalPanelState extends State<TerminalPanel>
             Expanded(
               child: Text(
                 tab.connectionInfo,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.8)),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -307,25 +394,32 @@ class TerminalPanelState extends State<TerminalPanel>
           ],
           _KeyButton(
               label: 'Esc',
+              textColor: textColor,
               onPressed: hasSession ? () => _sendKey('\x1b') : null),
           _KeyButton(
               label: 'Ctrl+C',
+              textColor: textColor,
               onPressed: hasSession ? () => _sendKey('\x03') : null),
           _KeyButton(
               label: 'Ctrl+D',
+              textColor: textColor,
               onPressed: hasSession ? () => _sendKey('\x04') : null),
           _KeyButton(
               label: 'Tab',
+              textColor: textColor,
               onPressed: hasSession ? () => _sendKey('\t') : null),
           IconButton(
-            icon: const Icon(Icons.content_paste, size: 18),
+            icon: Icon(Icons.content_paste, size: 18, color: iconColor),
             tooltip: 'Paste',
             onPressed: hasSession ? _pasteToShell : null,
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
-            icon: Icon(_showLogs ? Icons.expand_more : Icons.expand_less,
-                size: 18),
+            icon: Icon(
+              _showLogs ? Icons.expand_more : Icons.expand_less,
+              size: 18,
+              color: iconColor,
+            ),
             tooltip: _showLogs ? 'Hide logs' : 'Show logs',
             onPressed: () => setState(() => _showLogs = !_showLogs),
             visualDensity: VisualDensity.compact,
@@ -335,22 +429,39 @@ class TerminalPanelState extends State<TerminalPanel>
     );
   }
 
-  Widget _buildLogsDrawer() {
+  Widget _buildLogsDrawer(TerminalTheme termTheme) {
     final tab = _activeTab;
+    final logsColor = Color.lerp(termTheme.background, Colors.black, 0.25)!;
+    final textColor = termTheme.foreground;
+
     if (tab == null) {
       return Container(
         height: 120,
         padding: const EdgeInsets.all(12),
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        child: const Center(child: Text('No logs')),
+        decoration: BoxDecoration(
+          color: logsColor,
+          border: Border(
+            top: BorderSide(color: termTheme.foreground.withOpacity(0.1)),
+          ),
+        ),
+        child: Center(
+          child: Text('No logs', style: TextStyle(color: textColor.withOpacity(0.5))),
+        ),
       );
     }
     return Container(
       height: 150,
       padding: const EdgeInsets.all(8),
-      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+      decoration: BoxDecoration(
+        color: logsColor,
+        border: Border(
+          top: BorderSide(color: termTheme.foreground.withOpacity(0.1)),
+        ),
+      ),
       child: tab.logs.isEmpty
-          ? const Center(child: Text('No logs yet'))
+          ? Center(
+              child: Text('No logs yet', style: TextStyle(color: textColor.withOpacity(0.5))),
+            )
           : ListView.builder(
               reverse: true,
               itemCount: tab.logs.length,
@@ -364,7 +475,7 @@ class TerminalPanelState extends State<TerminalPanel>
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 11,
-                      color: _logColor(entry),
+                      color: _logColor(entry, termTheme),
                     ),
                   ),
                 );
@@ -373,25 +484,25 @@ class TerminalPanelState extends State<TerminalPanel>
     );
   }
 
-  Color _logColor(String entry) {
+  Color _logColor(String entry, TerminalTheme termTheme) {
     final lower = entry.toLowerCase();
     if (lower.contains('error') ||
         lower.contains('failed') ||
         lower.contains('exception')) {
-      return Colors.red;
+      return termTheme.red;
     }
     if (lower.contains('authenticated') ||
         lower.contains('auth success') ||
         lower.contains('success') ||
         lower.contains('connected')) {
-      return Colors.green[700]!;
+      return termTheme.green;
     }
     if (lower.contains('warning') ||
         lower.contains('warn') ||
         lower.contains('mismatch')) {
-      return Colors.amber[800]!;
+      return termTheme.yellow;
     }
-    return Colors.blue[700]!;
+    return termTheme.cyan;
   }
 
   void _handleMenuAction(String action) {
@@ -893,13 +1004,15 @@ class _HostPickerSheet extends StatelessWidget {
 // -----------------------------------------------------------------------------
 
 class _KeyButton extends StatelessWidget {
-  const _KeyButton({required this.label, this.onPressed});
+  const _KeyButton({required this.label, this.onPressed, this.textColor});
 
   final String label;
   final VoidCallback? onPressed;
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context) {
+    final color = textColor ?? Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: TextButton(
@@ -908,8 +1021,15 @@ class _KeyButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           minimumSize: const Size(0, 32),
           visualDensity: VisualDensity.compact,
+          foregroundColor: color,
         ),
-        child: Text(label, style: const TextStyle(fontSize: 11)),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: onPressed != null ? color : color.withOpacity(0.4),
+          ),
+        ),
       ),
     );
   }
