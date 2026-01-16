@@ -30,7 +30,11 @@ class TerminalThemePresets {
     'dracula',
     'nord',
     'gruvbox-dark',
+    'gruvbox-light',
     'one-dark',
+    'one-light',
+    'github-light',
+    'tomorrow-light',
   ];
 
   /// Get theme by name.
@@ -48,8 +52,16 @@ class TerminalThemePresets {
         return nord;
       case 'gruvbox-dark':
         return gruvboxDark;
+      case 'gruvbox-light':
+        return gruvboxLight;
       case 'one-dark':
         return oneDark;
+      case 'one-light':
+        return oneLight;
+      case 'github-light':
+        return githubLight;
+      case 'tomorrow-light':
+        return tomorrowLight;
       case 'default':
       default:
         return defaultTheme;
@@ -269,6 +281,114 @@ class TerminalThemePresets {
     brightWhite: Color(0xFFFFFFFF),
     searchHitBackground: Color(0xFFFFFF2B),
     searchHitBackgroundCurrent: Color(0xFF31FF26),
+    searchHitForeground: Color(0xFF000000),
+  );
+
+  /// One Light theme (Atom style).
+  static const oneLight = TerminalTheme(
+    cursor: Color(0xFF383A42),
+    selection: Color(0x40526FFF),
+    foreground: Color(0xFF383A42),
+    background: Color(0xFFFAFAFA),
+    black: Color(0xFF383A42),
+    red: Color(0xFFE45649),
+    green: Color(0xFF50A14F),
+    yellow: Color(0xFFC18401),
+    blue: Color(0xFF4078F2),
+    magenta: Color(0xFFA626A4),
+    cyan: Color(0xFF0184BC),
+    white: Color(0xFFA0A1A7),
+    brightBlack: Color(0xFF696C77),
+    brightRed: Color(0xFFE45649),
+    brightGreen: Color(0xFF50A14F),
+    brightYellow: Color(0xFFC18401),
+    brightBlue: Color(0xFF4078F2),
+    brightMagenta: Color(0xFFA626A4),
+    brightCyan: Color(0xFF0184BC),
+    brightWhite: Color(0xFFFFFFFF),
+    searchHitBackground: Color(0xFFFFFF00),
+    searchHitBackgroundCurrent: Color(0xFF00FF00),
+    searchHitForeground: Color(0xFF000000),
+  );
+
+  /// Gruvbox Light theme.
+  static const gruvboxLight = TerminalTheme(
+    cursor: Color(0xFF282828),
+    selection: Color(0x40458588),
+    foreground: Color(0xFF3C3836),
+    background: Color(0xFFFBF1C7),
+    black: Color(0xFFFBF1C7),
+    red: Color(0xFFCC241D),
+    green: Color(0xFF98971A),
+    yellow: Color(0xFFD79921),
+    blue: Color(0xFF458588),
+    magenta: Color(0xFFB16286),
+    cyan: Color(0xFF689D6A),
+    white: Color(0xFF7C6F64),
+    brightBlack: Color(0xFF928374),
+    brightRed: Color(0xFF9D0006),
+    brightGreen: Color(0xFF79740E),
+    brightYellow: Color(0xFFB57614),
+    brightBlue: Color(0xFF076678),
+    brightMagenta: Color(0xFF8F3F71),
+    brightCyan: Color(0xFF427B58),
+    brightWhite: Color(0xFF3C3836),
+    searchHitBackground: Color(0xFFFFFF00),
+    searchHitBackgroundCurrent: Color(0xFF00FF00),
+    searchHitForeground: Color(0xFF000000),
+  );
+
+  /// GitHub Light theme.
+  static const githubLight = TerminalTheme(
+    cursor: Color(0xFF044289),
+    selection: Color(0x40044289),
+    foreground: Color(0xFF24292E),
+    background: Color(0xFFFFFFFF),
+    black: Color(0xFF24292E),
+    red: Color(0xFFD73A49),
+    green: Color(0xFF28A745),
+    yellow: Color(0xFFDBAB09),
+    blue: Color(0xFF0366D6),
+    magenta: Color(0xFF6F42C1),
+    cyan: Color(0xFF1B7C83),
+    white: Color(0xFF6A737D),
+    brightBlack: Color(0xFF959DA5),
+    brightRed: Color(0xFFCB2431),
+    brightGreen: Color(0xFF22863A),
+    brightYellow: Color(0xFFB08800),
+    brightBlue: Color(0xFF005CC5),
+    brightMagenta: Color(0xFF5A32A3),
+    brightCyan: Color(0xFF3192AA),
+    brightWhite: Color(0xFFD1D5DA),
+    searchHitBackground: Color(0xFFFFFF00),
+    searchHitBackgroundCurrent: Color(0xFF00FF00),
+    searchHitForeground: Color(0xFF000000),
+  );
+
+  /// Tomorrow Light theme.
+  static const tomorrowLight = TerminalTheme(
+    cursor: Color(0xFF4D4D4C),
+    selection: Color(0x40D6D6D6),
+    foreground: Color(0xFF4D4D4C),
+    background: Color(0xFFFFFFFF),
+    black: Color(0xFF000000),
+    red: Color(0xFFC82829),
+    green: Color(0xFF718C00),
+    yellow: Color(0xFFEAB700),
+    blue: Color(0xFF4271AE),
+    magenta: Color(0xFF8959A8),
+    cyan: Color(0xFF3E999F),
+    white: Color(0xFFFFFFFF),
+    brightBlack: Color(0xFF8E908C),
+    brightRed: Color(0xFFC82829),
+    brightGreen: Color(0xFF718C00),
+    brightYellow: Color(0xFFEAB700),
+    brightBlue: Color(0xFF4271AE),
+    brightMagenta: Color(0xFF8959A8),
+    brightCyan: Color(0xFF3E999F),
+    brightWhite: Color(0xFFFFFFFF),
+    searchHitBackground: Color(0xFFFFFF00),
+    searchHitBackgroundCurrent: Color(0xFF00FF00),
     searchHitForeground: Color(0xFF000000),
   );
 }
