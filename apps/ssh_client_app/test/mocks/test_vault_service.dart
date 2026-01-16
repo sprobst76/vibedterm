@@ -133,6 +133,8 @@ class TestVaultService implements VaultServiceInterface {
     int port = 22,
     required String username,
     String? identityId,
+    bool tmuxEnabled = false,
+    String? tmuxSessionName,
   }) async {
     if (_currentData == null) {
       state.value = state.value.copyWith(
@@ -149,6 +151,8 @@ class TestVaultService implements VaultServiceInterface {
       port: port,
       username: username,
       identityId: identityId,
+      tmuxEnabled: tmuxEnabled,
+      tmuxSessionName: tmuxSessionName,
       createdAt: now,
       updatedAt: now,
     );

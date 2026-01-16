@@ -243,6 +243,8 @@ class VaultService implements VaultServiceInterface {
     int port = 22,
     required String username,
     String? identityId,
+    bool tmuxEnabled = false,
+    String? tmuxSessionName,
   }) async {
     if (_current == null) {
       state.value = state.value.copyWith(
@@ -259,6 +261,8 @@ class VaultService implements VaultServiceInterface {
       port: port,
       username: username,
       identityId: identityId,
+      tmuxEnabled: tmuxEnabled,
+      tmuxSessionName: tmuxSessionName,
       createdAt: now,
       updatedAt: now,
     );

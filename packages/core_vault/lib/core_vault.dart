@@ -366,6 +366,8 @@ class VaultHost {
     required this.username,
     this.identityId,
     this.tags = const <String>[],
+    this.tmuxEnabled = false,
+    this.tmuxSessionName,
     this.createdAt,
     this.updatedAt,
   });
@@ -377,6 +379,10 @@ class VaultHost {
   final String username;
   final String? identityId; // references VaultIdentity.id
   final List<String> tags;
+  /// Whether to auto-attach to tmux on connect.
+  final bool tmuxEnabled;
+  /// Optional tmux session name (uses default if null).
+  final String? tmuxSessionName;
   final String? createdAt;
   final String? updatedAt;
 
@@ -388,6 +394,8 @@ class VaultHost {
         'username': username,
         if (identityId != null) 'identityId': identityId,
         if (tags.isNotEmpty) 'tags': tags,
+        if (tmuxEnabled) 'tmuxEnabled': tmuxEnabled,
+        if (tmuxSessionName != null) 'tmuxSessionName': tmuxSessionName,
         if (createdAt != null) 'createdAt': createdAt,
         if (updatedAt != null) 'updatedAt': updatedAt,
       };
@@ -401,6 +409,8 @@ class VaultHost {
       username: json['username'] as String,
       identityId: json['identityId'] as String?,
       tags: (json['tags'] as List?)?.cast<String>() ?? const <String>[],
+      tmuxEnabled: (json['tmuxEnabled'] as bool?) ?? false,
+      tmuxSessionName: json['tmuxSessionName'] as String?,
       createdAt: json['createdAt'] as String?,
       updatedAt: json['updatedAt'] as String?,
     );
@@ -413,6 +423,8 @@ class VaultHost {
     String? username,
     String? identityId,
     List<String>? tags,
+    bool? tmuxEnabled,
+    String? tmuxSessionName,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -424,6 +436,8 @@ class VaultHost {
       username: username ?? this.username,
       identityId: identityId ?? this.identityId,
       tags: tags ?? this.tags,
+      tmuxEnabled: tmuxEnabled ?? this.tmuxEnabled,
+      tmuxSessionName: tmuxSessionName ?? this.tmuxSessionName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -134,74 +134,104 @@ class HostsScreen extends StatelessWidget {
         TextEditingController(text: existing?.username ?? 'root');
     final portController =
         TextEditingController(text: (existing?.port ?? 22).toString());
+    final tmuxSessionController =
+        TextEditingController(text: existing?.tmuxSessionName ?? '');
     String? selectedIdentityId = existing?.identityId;
+    bool tmuxEnabled = existing?.tmuxEnabled ?? false;
 
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(existing == null ? 'Add host' : 'Edit host'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: labelController,
-                decoration: const InputDecoration(labelText: 'Label'),
-                autofocus: true,
-              ),
-              TextField(
-                controller: hostController,
-                decoration: const InputDecoration(labelText: 'Hostname'),
-              ),
-              TextField(
-                controller: portController,
-                decoration: const InputDecoration(labelText: 'Port'),
-                keyboardType: TextInputType.number,
-              ),
-              TextField(
-                controller: userController,
-                decoration: const InputDecoration(labelText: 'Username'),
-              ),
-              if (service.currentData?.identities.isNotEmpty ?? false) ...[
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String?>(
-                  initialValue: selectedIdentityId,
-                  decoration: const InputDecoration(labelText: 'Identity'),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('None'),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(existing == null ? 'Add host' : 'Edit host'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: labelController,
+                      decoration: const InputDecoration(labelText: 'Label'),
+                      autofocus: true,
                     ),
-                    ...service.currentData!.identities.map(
-                      (id) => DropdownMenuItem<String?>(
-                        value: id.id,
-                        child: Text(id.name),
+                    TextField(
+                      controller: hostController,
+                      decoration: const InputDecoration(labelText: 'Hostname'),
+                    ),
+                    TextField(
+                      controller: portController,
+                      decoration: const InputDecoration(labelText: 'Port'),
+                      keyboardType: TextInputType.number,
+                    ),
+                    TextField(
+                      controller: userController,
+                      decoration: const InputDecoration(labelText: 'Username'),
+                    ),
+                    if (service.currentData?.identities.isNotEmpty ??
+                        false) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String?>(
+                        initialValue: selectedIdentityId,
+                        decoration: const InputDecoration(labelText: 'Identity'),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('None'),
+                          ),
+                          ...service.currentData!.identities.map(
+                            (id) => DropdownMenuItem<String?>(
+                              value: id.id,
+                              child: Text(id.name),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          selectedIdentityId = value;
+                        },
                       ),
+                    ],
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    CheckboxListTile(
+                      title: const Text('Auto-attach tmux'),
+                      subtitle: const Text('Start or attach to tmux session'),
+                      value: tmuxEnabled,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (value) {
+                        setDialogState(() => tmuxEnabled = value ?? false);
+                      },
                     ),
+                    if (tmuxEnabled)
+                      TextField(
+                        controller: tmuxSessionController,
+                        decoration: const InputDecoration(
+                          labelText: 'Session name (optional)',
+                          hintText: 'Leave empty for default',
+                        ),
+                      ),
                   ],
-                  onChanged: (value) {
-                    selectedIdentityId = value;
-                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Save'),
                 ),
               ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
 
     if (result != true) return;
     final port = int.tryParse(portController.text) ?? 22;
+    final tmuxSession = tmuxSessionController.text.trim();
     if (existing == null) {
       await service.addHost(
         label: labelController.text.trim(),
@@ -209,6 +239,8 @@ class HostsScreen extends StatelessWidget {
         port: port,
         username: userController.text.trim(),
         identityId: selectedIdentityId,
+        tmuxEnabled: tmuxEnabled,
+        tmuxSessionName: tmuxSession.isEmpty ? null : tmuxSession,
       );
     } else {
       await service.updateHost(
@@ -218,6 +250,8 @@ class HostsScreen extends StatelessWidget {
           port: port,
           username: userController.text.trim(),
           identityId: selectedIdentityId,
+          tmuxEnabled: tmuxEnabled,
+          tmuxSessionName: tmuxSession.isEmpty ? null : tmuxSession,
         ),
       );
     }

@@ -69,6 +69,8 @@ abstract class VaultServiceInterface {
     int port,
     required String username,
     String? identityId,
+    bool tmuxEnabled,
+    String? tmuxSessionName,
   });
 
   Future<void> addIdentity({
