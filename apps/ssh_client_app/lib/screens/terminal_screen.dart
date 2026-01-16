@@ -587,6 +587,12 @@ class TerminalPanelState extends State<TerminalPanel>
 
     if (mounted) {
       setState(() {});
+
+      // Handle tmux auto-attach if enabled
+      if (host.tmuxEnabled && tab.status == TabConnectionStatus.connected) {
+        await _handleTmuxAutoAttach(tab, host);
+      }
+
       // Delay focus to avoid Windows platform exception
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
@@ -596,6 +602,49 @@ class TerminalPanelState extends State<TerminalPanel>
         }
       });
     }
+  }
+
+  Future<void> _handleTmuxAutoAttach(_ConnectionTab tab, VaultHost host) async {
+    // If a specific session name is configured, just attach to it
+    if (host.tmuxSessionName != null && host.tmuxSessionName!.isNotEmpty) {
+      await tab.attachTmuxSession(host.tmuxSessionName);
+      if (mounted) setState(() {});
+      return;
+    }
+
+    // List existing sessions
+    final sessions = await tab.listTmuxSessions();
+
+    if (sessions.isEmpty) {
+      // No sessions, create a new one
+      await tab.attachTmuxSession(null);
+      if (mounted) setState(() {});
+      return;
+    }
+
+    if (sessions.length == 1) {
+      // Only one session, attach to it
+      await tab.attachTmuxSession(sessions.first.name);
+      if (mounted) setState(() {});
+      return;
+    }
+
+    // Multiple sessions - show picker
+    if (!mounted) return;
+    final selected = await showDialog<String?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _TmuxSessionPickerDialog(sessions: sessions),
+    );
+
+    if (selected != null) {
+      await tab.attachTmuxSession(selected);
+    } else {
+      // User cancelled or chose to skip tmux
+      tab.attachedTmuxSession = null;
+    }
+
+    if (mounted) setState(() {});
   }
 
   Future<void> _confirmCloseTab(_ConnectionTab tab) async {
@@ -1119,11 +1168,16 @@ class _ConnectionTab {
   TabConnectionStatus status = TabConnectionStatus.disconnected;
   final List<String> logs = [];
 
+  /// The currently attached tmux session name (if any).
+  String? attachedTmuxSession;
+
   StreamSubscription<SshConnectionStatus>? _statusSub;
   StreamSubscription<String>? _logSub;
   VoidCallback? _onStatusChange;
 
-  String get label => host.label;
+  String get label => attachedTmuxSession != null
+      ? '${host.label} [$attachedTmuxSession]'
+      : host.label;
   String get connectionInfo => '${host.username}@${host.hostname}:${host.port}';
 
   void init({
@@ -1237,11 +1291,6 @@ class _ConnectionTab {
 
     _addLog('Shell opened');
 
-    // Auto-attach to tmux if enabled
-    if (host.tmuxEnabled) {
-      await _autoAttachTmux(newSession);
-    }
-
     unawaited(newSession.done.whenComplete(() {
       session = null;
       _addLog('Shell closed');
@@ -1249,24 +1298,42 @@ class _ConnectionTab {
     }));
   }
 
-  /// Sends the tmux auto-attach command to attach to or create a session.
-  Future<void> _autoAttachTmux(SshShellSession shellSession) async {
+  /// Lists tmux sessions on the remote host.
+  Future<List<TmuxSession>> listTmuxSessions() async {
+    try {
+      final result = await manager.runCommand('tmux list-sessions 2>/dev/null');
+      if (result.exitCode != 0 || result.stdout.isEmpty) {
+        return [];
+      }
+      return TmuxSession.parseListSessions(result.stdout);
+    } catch (e) {
+      _addLog('Failed to list tmux sessions: $e');
+      return [];
+    }
+  }
+
+  /// Sends the tmux attach command for the specified session.
+  Future<void> attachTmuxSession(String? sessionName) async {
+    final shellSession = session;
+    if (shellSession == null) return;
+
     // Small delay to let the shell initialize
     await Future.delayed(const Duration(milliseconds: 300));
 
-    final sessionName = host.tmuxSessionName;
     String tmuxCmd;
-
     if (sessionName != null && sessionName.isNotEmpty) {
       // Attach to named session or create it
       tmuxCmd = 'tmux attach -t $sessionName 2>/dev/null || tmux new -s $sessionName';
+      attachedTmuxSession = sessionName;
     } else {
       // Attach to any existing session or create default
       tmuxCmd = 'tmux attach 2>/dev/null || tmux new';
+      attachedTmuxSession = 'default';
     }
 
     _addLog('Auto-attaching tmux: $tmuxCmd');
     await shellSession.writeString('$tmuxCmd\n');
+    _onStatusChange?.call();
   }
 
   Future<void> dispose() async {
@@ -1806,5 +1873,83 @@ class _TmuxSessionManagerDialogState extends State<_TmuxSessionManagerDialog> {
     if (confirm == true) {
       await widget.onSessionAction(TmuxAction.killSession, sessionName);
     }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// tmux Session Picker Dialog (shown when multiple sessions exist)
+// -----------------------------------------------------------------------------
+
+class _TmuxSessionPickerDialog extends StatelessWidget {
+  const _TmuxSessionPickerDialog({required this.sessions});
+
+  final List<TmuxSession> sessions;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.grid_view),
+          SizedBox(width: 12),
+          Text('Select tmux Session'),
+        ],
+      ),
+      content: SizedBox(
+        width: 350,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Multiple tmux sessions found. Choose one to attach:',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: sessions.length,
+                itemBuilder: (context, index) {
+                  final session = sessions[index];
+                  return Card(
+                    child: ListTile(
+                      leading: Icon(
+                        session.attached ? Icons.visibility : Icons.grid_view,
+                        color: session.attached ? Colors.green : null,
+                      ),
+                      title: Text(
+                        session.name,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        '${session.windows} window${session.windows > 1 ? 's' : ''}'
+                        '${session.attached ? ' • attached' : ''}',
+                      ),
+                      onTap: () => Navigator.pop(context, session.name),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('Create new session'),
+              contentPadding: EdgeInsets.zero,
+              onTap: () => Navigator.pop(context, ''),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('Skip tmux'),
+        ),
+      ],
+    );
   }
 }
