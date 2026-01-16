@@ -312,6 +312,9 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     // reliably on Windows, so we handle all character input here.
     final char = event.character;
     if (char != null && char.isNotEmpty) {
+      // Debug: log character info to understand dead key handling
+      // ignore: avoid_print
+      print('[KEY-DEBUG] char="${char}" codeUnits=${char.codeUnits} logicalKey=${event.logicalKey.keyLabel}');
       sendToSession(char);
     }
   }
