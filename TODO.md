@@ -12,6 +12,7 @@
 - [x] Custom app icon
 - [x] Settings dialog with Appearance and SSH tabs
 - [x] SSH settings (keepalive, timeout, default port)
+- [x] Apply SSH keepalive settings to actual connections
 - [x] Multi-tab terminal with independent connections
 - [x] Password and key authentication
 - [x] Encrypted vault with auto-unlock
@@ -19,7 +20,6 @@
 
 ## In Progress
 
-- [ ] Apply SSH keepalive settings to actual connections
 - [ ] Implement auto-reconnect functionality
 
 ## Planned

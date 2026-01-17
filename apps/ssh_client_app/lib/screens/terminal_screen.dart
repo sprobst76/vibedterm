@@ -579,10 +579,14 @@ class TerminalPanelState extends State<TerminalPanel>
       _resetTabController(_tabs.length - 1);
     });
 
-    // Connect
+    // Connect with keepalive from settings
+    final keepaliveSecs =
+        widget.service.currentData?.settings.sshKeepaliveInterval ?? 30;
     await tab.connect(
       trustedKeys: _trustedHostKeys,
       onHostKeyPrompt: _handleHostKeyPrompt,
+      keepAliveInterval:
+          keepaliveSecs > 0 ? Duration(seconds: keepaliveSecs) : null,
     );
 
     if (mounted) {
@@ -1201,6 +1205,7 @@ class _ConnectionTab {
     required Map<String, Set<String>> trustedKeys,
     required Future<bool> Function(String host, String type, String fp)
         onHostKeyPrompt,
+    Duration? keepAliveInterval,
   }) async {
     status = TabConnectionStatus.connecting;
     _onStatusChange?.call();
@@ -1219,6 +1224,8 @@ class _ConnectionTab {
     print('[SSH-DEBUG] Key: $keyPreview');
     // ignore: avoid_print
     print('[SSH-DEBUG] Password provided: ${password?.isNotEmpty == true}');
+    // ignore: avoid_print
+    print('[SSH-DEBUG] Keepalive: ${keepAliveInterval?.inSeconds ?? 0}s');
     _addLog('Connecting: ${host.username}@${host.hostname}:${host.port}');
 
     try {
@@ -1230,6 +1237,7 @@ class _ConnectionTab {
           password: password?.isNotEmpty == true ? password : null,
           privateKey: identity?.privateKey,
           passphrase: identity?.passphrase,
+          keepAliveInterval: keepAliveInterval,
           onHostKeyVerify: (type, fp) => _handleHostKey(
             type,
             fp,
