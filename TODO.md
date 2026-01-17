@@ -13,14 +13,11 @@
 - [x] Settings dialog with Appearance and SSH tabs
 - [x] SSH settings (keepalive, timeout, default port)
 - [x] Apply SSH keepalive settings to actual connections
+- [x] Auto-reconnect with exponential backoff
 - [x] Multi-tab terminal with independent connections
 - [x] Password and key authentication
 - [x] Encrypted vault with auto-unlock
 - [x] Host key verification and trust management
-
-## In Progress
-
-- [ ] Implement auto-reconnect functionality
 
 ## Planned
 

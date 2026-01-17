@@ -579,14 +579,16 @@ class TerminalPanelState extends State<TerminalPanel>
       _resetTabController(_tabs.length - 1);
     });
 
-    // Connect with keepalive from settings
-    final keepaliveSecs =
-        widget.service.currentData?.settings.sshKeepaliveInterval ?? 30;
+    // Connect with settings from vault
+    final settings = widget.service.currentData?.settings;
+    final keepaliveSecs = settings?.sshKeepaliveInterval ?? 30;
+    final autoReconnect = settings?.sshAutoReconnect ?? false;
     await tab.connect(
       trustedKeys: _trustedHostKeys,
       onHostKeyPrompt: _handleHostKeyPrompt,
       keepAliveInterval:
           keepaliveSecs > 0 ? Duration(seconds: keepaliveSecs) : null,
+      autoReconnect: autoReconnect,
     );
 
     if (mounted) {
@@ -1179,10 +1181,23 @@ class _ConnectionTab {
   StreamSubscription<String>? _logSub;
   VoidCallback? _onStatusChange;
 
+  // Auto-reconnect state
+  bool _autoReconnectEnabled = false;
+  bool _isReconnecting = false;
+  bool _userDisconnected = false;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 5;
+
+  // Stored connection params for reconnect
+  Map<String, Set<String>>? _trustedKeys;
+  Future<bool> Function(String, String, String)? _onHostKeyPrompt;
+  Duration? _keepAliveInterval;
+
   String get label => attachedTmuxSession != null
       ? '${host.label} [$attachedTmuxSession]'
       : host.label;
   String get connectionInfo => '${host.username}@${host.hostname}:${host.port}';
+  bool get isReconnecting => _isReconnecting;
 
   void init({
     required VoidCallback onStatusChange,
@@ -1206,7 +1221,15 @@ class _ConnectionTab {
     required Future<bool> Function(String host, String type, String fp)
         onHostKeyPrompt,
     Duration? keepAliveInterval,
+    bool autoReconnect = false,
   }) async {
+    // Store params for potential reconnect
+    _trustedKeys = trustedKeys;
+    _onHostKeyPrompt = onHostKeyPrompt;
+    _keepAliveInterval = keepAliveInterval;
+    _autoReconnectEnabled = autoReconnect;
+    _userDisconnected = false;
+
     status = TabConnectionStatus.connecting;
     _onStatusChange?.call();
     bridge.write('Connecting to ${host.hostname}:${host.port}...\r\n');
@@ -1298,12 +1321,98 @@ class _ConnectionTab {
     bridge.terminal.onResize = (w, h, pw, ph) => newSession.resize(w, h);
 
     _addLog('Shell opened');
+    _reconnectAttempts = 0; // Reset on successful connection
 
     unawaited(newSession.done.whenComplete(() {
       session = null;
       _addLog('Shell closed');
       _onStatusChange?.call();
+
+      // Attempt auto-reconnect if enabled and not user-initiated
+      if (_autoReconnectEnabled && !_userDisconnected && !_isReconnecting) {
+        _attemptReconnect();
+      }
     }));
+  }
+
+  /// Attempts to reconnect with exponential backoff.
+  Future<void> _attemptReconnect() async {
+    if (_isReconnecting) return;
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      bridge.write('\r\n[Auto-reconnect] Max attempts reached. Use manual reconnect.\r\n');
+      _addLog('Auto-reconnect: max attempts reached');
+      return;
+    }
+
+    _isReconnecting = true;
+    _reconnectAttempts++;
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+    final delay = Duration(seconds: 1 << (_reconnectAttempts - 1));
+    bridge.write('\r\n[Auto-reconnect] Attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s...\r\n');
+    _addLog('Auto-reconnect: attempt $_reconnectAttempts in ${delay.inSeconds}s');
+
+    await Future.delayed(delay);
+
+    // Check if user cancelled or tab was closed
+    if (_userDisconnected || _trustedKeys == null || _onHostKeyPrompt == null) {
+      _isReconnecting = false;
+      return;
+    }
+
+    try {
+      bridge.write('[Auto-reconnect] Connecting...\r\n');
+      await manager.connect(
+        SshTarget(
+          host: host.hostname,
+          port: host.port,
+          username: host.username,
+          password: password?.isNotEmpty == true ? password : null,
+          privateKey: identity?.privateKey,
+          passphrase: identity?.passphrase,
+          keepAliveInterval: _keepAliveInterval,
+          onHostKeyVerify: (type, fp) => _handleHostKey(
+            type,
+            fp,
+            _trustedKeys!,
+            _onHostKeyPrompt!,
+          ),
+        ),
+      );
+
+      status = TabConnectionStatus.connected;
+      _onStatusChange?.call();
+
+      bridge.write('[Auto-reconnect] Connected! Opening shell...\r\n');
+      _addLog('Auto-reconnect: success');
+
+      await _startShell();
+
+      // Re-attach tmux if was attached before
+      if (attachedTmuxSession != null) {
+        await attachTmuxSession(attachedTmuxSession);
+      }
+
+      _isReconnecting = false;
+    } catch (e) {
+      _isReconnecting = false;
+      final msg = e is SshException ? e.message : e.toString();
+      bridge.write('[Auto-reconnect] Failed: $msg\r\n');
+      _addLog('Auto-reconnect failed: $msg');
+
+      // Try again if we haven't exceeded max attempts
+      if (_reconnectAttempts < _maxReconnectAttempts && !_userDisconnected) {
+        unawaited(_attemptReconnect());
+      }
+    }
+  }
+
+  /// Cancels auto-reconnect and marks as user-disconnected.
+  void cancelReconnect() {
+    _userDisconnected = true;
+    _isReconnecting = false;
+    bridge.write('[Auto-reconnect] Cancelled by user.\r\n');
+    _addLog('Auto-reconnect: cancelled');
   }
 
   /// Lists tmux sessions on the remote host.
@@ -1345,6 +1454,7 @@ class _ConnectionTab {
   }
 
   Future<void> dispose() async {
+    _userDisconnected = true; // Prevent auto-reconnect
     unawaited(_statusSub?.cancel());
     unawaited(_logSub?.cancel());
     bridge.onOutput = null;
