@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:meta/meta.dart';
 
@@ -358,5 +359,53 @@ class _DartSshClientAdapter implements SshClientAdapter {
   Future<void> disconnect() async {
     _client.close();
     await _client.done.catchError((_) {});
+  }
+}
+
+// -----------------------------------------------------------------------------
+// SSH Key Fingerprint Utilities
+// -----------------------------------------------------------------------------
+
+/// Calculates the SHA256 fingerprint of an SSH private key.
+///
+/// Returns the fingerprint in the format "SHA256:base64_hash" or null if
+/// the key cannot be parsed.
+String? calculateKeyFingerprint(String privateKeyPem, {String? passphrase}) {
+  try {
+    final keyPairs = SSHKeyPair.fromPem(privateKeyPem, passphrase);
+    if (keyPairs.isEmpty) return null;
+
+    // Get the first key pair's public key
+    final keyPair = keyPairs.first;
+
+    // The public key blob is what we hash for the fingerprint
+    // SSHKeyPair exposes the public key which has the encoded blob
+    final publicKey = keyPair.toPublicKey();
+    final publicKeyBlob = publicKey.encode();
+
+    // Calculate SHA256 hash
+    final hash = sha256.convert(publicKeyBlob);
+
+    // Format as SHA256:base64 (standard OpenSSH format)
+    final base64Hash = base64Encode(hash.bytes);
+    // Remove trailing '=' padding for cleaner output
+    final cleanHash = base64Hash.replaceAll(RegExp(r'=+$'), '');
+
+    return 'SHA256:$cleanHash';
+  } catch (e) {
+    return null;
+  }
+}
+
+/// Returns the key type from a private key PEM.
+///
+/// Returns values like "ssh-rsa", "ssh-ed25519", "ecdsa-sha2-nistp256", etc.
+String? getKeyType(String privateKeyPem, {String? passphrase}) {
+  try {
+    final keyPairs = SSHKeyPair.fromPem(privateKeyPem, passphrase);
+    if (keyPairs.isEmpty) return null;
+    return keyPairs.first.type;
+  } catch (e) {
+    return null;
   }
 }

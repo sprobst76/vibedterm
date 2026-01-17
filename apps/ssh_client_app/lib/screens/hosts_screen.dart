@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:core_ssh/core_ssh.dart' show calculateKeyFingerprint;
 import 'package:core_vault/core_vault.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -66,27 +67,65 @@ class HostsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             ...data.identities.map(
-              (id) => Card(
-                child: ListTile(
-                  leading: const Icon(Icons.vpn_key),
-                  title: Text(id.name),
-                  subtitle: Text('${id.type} • ${id.id}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () =>
-                            _promptAddIdentity(context, existing: id),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => service.deleteIdentity(id.id),
-                      ),
-                    ],
+              (id) {
+                final fingerprint = calculateKeyFingerprint(
+                  id.privateKey,
+                  passphrase: id.passphrase,
+                );
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.vpn_key),
+                    title: Text(id.name),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(id.type),
+                        if (fingerprint != null)
+                          Text(
+                            fingerprint,
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                          ),
+                      ],
+                    ),
+                    isThreeLine: fingerprint != null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.copy),
+                          tooltip: 'Copy fingerprint',
+                          onPressed: fingerprint != null
+                              ? () {
+                                  Clipboard.setData(
+                                      ClipboardData(text: fingerprint));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text('Fingerprint copied to clipboard')),
+                                  );
+                                }
+                              : null,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          tooltip: 'Edit identity',
+                          onPressed: () =>
+                              _promptAddIdentity(context, existing: id),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          tooltip: 'Delete identity',
+                          onPressed: () => service.deleteIdentity(id.id),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             const SizedBox(height: 16),
             Text(
