@@ -1,14 +1,24 @@
+import 'package:core_sync/core_sync.dart';
 import 'package:core_vault/core_vault.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../services/sync_manager.dart';
 import '../services/vault_service.dart';
 
-class VaultScreen extends StatelessWidget {
-  const VaultScreen({super.key, required this.service});
+class VaultScreen extends StatefulWidget {
+  const VaultScreen({super.key, required this.service, required this.syncManager});
 
   final VaultServiceInterface service;
+  final SyncManager syncManager;
+
+  @override
+  State<VaultScreen> createState() => _VaultScreenState();
+}
+
+class _VaultScreenState extends State<VaultScreen> {
+  VaultServiceInterface get service => widget.service;
 
   @override
   Widget build(BuildContext context) {
@@ -38,32 +48,37 @@ class VaultScreen extends StatelessWidget {
                   runSpacing: 12,
                   alignment: WrapAlignment.center,
                   children: [
-                    FilledButton.icon(
-                      onPressed: service.createDemoVault,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create demo vault'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: state.filePath == null
-                          ? null
-                          : () => service.unlockDemoVault(state.filePath!),
-                      icon: const Icon(Icons.lock_open),
-                      label: const Text('Unlock demo vault'),
+                    // Sync from cloud button (prominently placed)
+                    StreamBuilder<CombinedSyncStatus>(
+                      stream: widget.syncManager.statusStream,
+                      initialData: widget.syncManager.status,
+                      builder: (context, snapshot) {
+                        final status = snapshot.data ?? CombinedSyncStatus.disconnected;
+                        final isConfigured = widget.syncManager.isConfigured;
+                        final isAuthenticated = status.isAuthenticated;
+
+                        return FilledButton.icon(
+                          onPressed: isConfigured && isAuthenticated
+                              ? () => _syncFromCloud(context)
+                              : () => _showSyncSetup(context),
+                          icon: Icon(isAuthenticated ? Icons.cloud_download : Icons.cloud_outlined),
+                          label: Text(isAuthenticated ? 'Sync from Cloud' : 'Setup Cloud Sync'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Theme.of(context).colorScheme.tertiary,
+                            foregroundColor: Theme.of(context).colorScheme.onTertiary,
+                          ),
+                        );
+                      },
                     ),
                     FilledButton.icon(
                       onPressed: () => _pickAndUnlock(context),
                       icon: const Icon(Icons.folder_open),
-                      label: const Text('Pick vault file'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: () => _pickAndCreate(context),
-                      icon: const Icon(Icons.note_add),
-                      label: const Text('Create vault at path'),
+                      label: const Text('Open vault file'),
                     ),
                     FilledButton.icon(
                       onPressed: () => _quickCreateVault(context),
                       icon: const Icon(Icons.flash_on),
-                      label: const Text('Quick create (app storage)'),
+                      label: const Text('Create new vault'),
                     ),
                   ],
                 ),
@@ -249,6 +264,264 @@ class VaultScreen extends StatelessWidget {
       rememberSession: rememberSession,
       rememberSecure: rememberSecure,
     );
+  }
+
+  Future<void> _syncFromCloud(BuildContext context) async {
+    // First ask for the vault password since we need to decrypt the downloaded vault
+    final passwordResult = await _promptForPassword(
+      context,
+      title: 'Enter vault password',
+    );
+    if (passwordResult == null || passwordResult.password.isEmpty) return;
+
+    // Get app documents directory for vault storage
+    final docs = await getApplicationDocumentsDirectory();
+    final vaultPath = '${docs.path}/vibedterm_synced.vlt';
+
+    // Show progress dialog
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Downloading vault from cloud...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Download vault from server
+      await widget.syncManager.forceDownload(vaultFilePath: vaultPath);
+
+      // Close progress dialog
+      if (context.mounted) Navigator.of(context).pop();
+
+      // Unlock the downloaded vault
+      await service.unlockVault(
+        path: vaultPath,
+        password: passwordResult.password,
+        rememberPasswordForSession: passwordResult.rememberSession,
+        rememberPasswordSecurely: passwordResult.rememberSecure,
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vault synced from cloud')),
+        );
+      }
+    } catch (e) {
+      // Close progress dialog
+      if (context.mounted) Navigator.of(context).pop();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed: $e')),
+        );
+      }
+    }
+  }
+
+  void _showSyncSetup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => _SyncSetupDialog(syncManager: widget.syncManager),
+    );
+  }
+}
+
+/// Dialog for quick sync server setup and login
+class _SyncSetupDialog extends StatefulWidget {
+  const _SyncSetupDialog({required this.syncManager});
+
+  final SyncManager syncManager;
+
+  @override
+  State<_SyncSetupDialog> createState() => _SyncSetupDialogState();
+}
+
+class _SyncSetupDialogState extends State<_SyncSetupDialog> {
+  final _serverController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isBusy = false;
+  String? _error;
+  bool _serverConfigured = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _serverController.text = widget.syncManager.serverUrl;
+    _serverConfigured = widget.syncManager.isConfigured;
+  }
+
+  @override
+  void dispose() {
+    _serverController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cloud Sync Setup'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_error != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error, color: Theme.of(context).colorScheme.error),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_error!)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Server URL
+            Text('Sync Server', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _serverController,
+                    enabled: !_serverConfigured,
+                    decoration: const InputDecoration(
+                      hintText: 'https://sync.example.com',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                ),
+                if (!_serverConfigured) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.check),
+                    onPressed: _isBusy ? null : _configureServer,
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            if (_serverConfigured) ...[
+              // Email
+              Text('Email', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  hintText: 'you@example.com',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 12),
+
+              // Password
+              Text('Password', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                obscureText: true,
+                onSubmitted: (_) => _login(),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        if (_serverConfigured)
+          FilledButton(
+            onPressed: _isBusy ? null : _login,
+            child: _isBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Login'),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _configureServer() async {
+    final url = _serverController.text.trim();
+    if (url.isEmpty) {
+      setState(() => _error = 'Please enter a server URL');
+      return;
+    }
+
+    setState(() {
+      _isBusy = true;
+      _error = null;
+    });
+
+    try {
+      await widget.syncManager.configure(url);
+      setState(() => _serverConfigured = true);
+    } catch (e) {
+      setState(() => _error = 'Failed to connect: $e');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please enter email and password');
+      return;
+    }
+
+    setState(() {
+      _isBusy = true;
+      _error = null;
+    });
+
+    try {
+      await widget.syncManager.login(
+        email: email,
+        password: password,
+        deviceName: 'VibedTerm Mobile',
+        deviceType: 'android',
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() => _error = 'Login failed: $e');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
   }
 }
 

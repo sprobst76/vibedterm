@@ -198,16 +198,18 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Widget _buildPageStack() {
-    return IndexedStack(
-      index: _index,
-      children: [
-        VaultScreen(service: _vaultService),
-        HostsScreen(
-          service: _vaultService,
-          onConnectHost: _handleConnectHost,
-        ),
-        TerminalScreen(service: _vaultService),
-      ],
+    return SafeArea(
+      child: IndexedStack(
+        index: _index,
+        children: [
+          VaultScreen(service: _vaultService, syncManager: widget.syncManager),
+          HostsScreen(
+            service: _vaultService,
+            onConnectHost: _handleConnectHost,
+          ),
+          TerminalScreen(service: _vaultService),
+        ],
+      ),
     );
   }
 
