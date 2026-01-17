@@ -130,6 +130,9 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 700;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return ValueListenableBuilder<VaultState>(
       valueListenable: _vaultService.state,
       builder: (context, state, child) {
@@ -141,42 +144,24 @@ class _HomeShellState extends State<HomeShell> {
           });
           _lastMessage = state.message;
         }
+
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('VibedTerm'),
-            actions: const [
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Icon(Icons.sync),
-              ),
+          body: Row(
+            children: [
+              // Custom vertical sidebar (only on wide screens)
+              if (isWide)
+                _buildSidebar(colorScheme),
+              // Main content
+              Expanded(child: _buildPageStack()),
             ],
           ),
-          body: isWide
-              ? Row(
-                  children: [
-                    NavigationRail(
-                      selectedIndex: _index,
-                      onDestinationSelected: _setIndex,
-                      labelType: NavigationRailLabelType.all,
-                      destinations: _pages
-                          .map(
-                            (page) => NavigationRailDestination(
-                              icon: Icon(page.icon),
-                              label: Text(page.label),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: _buildPageStack()),
-                  ],
-                )
-              : _buildPageStack(),
+          // Only show bottom nav on small screens
           bottomNavigationBar: isWide
               ? null
               : NavigationBar(
                   selectedIndex: _index,
                   onDestinationSelected: _setIndex,
+                  height: 60,
                   destinations: _pages
                       .map(
                         (page) => NavigationDestination(
@@ -202,6 +187,103 @@ class _HomeShellState extends State<HomeShell> {
         ),
         TerminalScreen(service: _vaultService),
       ],
+    );
+  }
+
+  Widget _buildSidebar(ColorScheme colorScheme) {
+    return Container(
+      width: 56,
+      decoration: BoxDecoration(
+        color: Color.lerp(colorScheme.surface, Colors.black, 0.15),
+        border: Border(
+          right: BorderSide(
+            color: colorScheme.outline.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Rotated VibedTerm branding
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 100,
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: Text(
+                'VibedTerm',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+          const Spacer(),
+          // Navigation icons
+          ..._pages.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final page = entry.value;
+            final isSelected = _index == idx;
+            return Tooltip(
+              message: page.label,
+              preferBelow: false,
+              waitDuration: const Duration(milliseconds: 500),
+              child: InkWell(
+                onTap: () => _setIndex(idx),
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? colorScheme.primary.withOpacity(0.15)
+                        : Colors.transparent,
+                    border: Border(
+                      left: BorderSide(
+                        color: isSelected
+                            ? colorScheme.primary
+                            : Colors.transparent,
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                  child: Icon(
+                    page.icon,
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.onSurface.withOpacity(0.6),
+                    size: 24,
+                  ),
+                ),
+              ),
+            );
+          }),
+          const Spacer(),
+          // Settings icon at bottom
+          Tooltip(
+            message: 'Settings',
+            preferBelow: false,
+            child: InkWell(
+              onTap: () {
+                // Open settings - switch to vault screen which has settings
+                _setIndex(0);
+              },
+              child: SizedBox(
+                width: 56,
+                height: 48,
+                child: Icon(
+                  Icons.settings_outlined,
+                  color: colorScheme.onSurface.withOpacity(0.5),
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 
