@@ -14,6 +14,7 @@
 - [x] SSH settings (keepalive, timeout, default port)
 - [x] Apply SSH keepalive settings to actual connections
 - [x] Auto-reconnect with exponential backoff
+- [x] Import SSH keys from ~/.ssh
 - [x] Multi-tab terminal with independent connections
 - [x] Password and key authentication
 - [x] Encrypted vault with auto-unlock
@@ -23,7 +24,6 @@
 
 ### High Priority
 
-- [ ] **Import from ~/.ssh**: Easy import of existing SSH keys
 - [ ] **Key fingerprint display**: Show fingerprint in identity details
 - [ ] **Reconnect button**: Quick reconnect for disconnected tabs
 - [ ] **tmux session list auto-refresh**: Parse terminal output for session list

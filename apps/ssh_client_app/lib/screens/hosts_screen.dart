@@ -46,6 +46,12 @@ class HostsScreen extends StatelessWidget {
                   icon: const Icon(Icons.vpn_key),
                   label: const Text('Add identity'),
                 ),
+                if (!Platform.isAndroid && !Platform.isIOS)
+                  OutlinedButton.icon(
+                    onPressed: () => _promptImportFromSsh(context),
+                    icon: const Icon(Icons.download),
+                    label: const Text('Import from ~/.ssh'),
+                  ),
                 FilledButton.icon(
                   onPressed: () => _promptAddHost(context),
                   icon: const Icon(Icons.add),
@@ -376,6 +382,140 @@ class HostsScreen extends StatelessWidget {
     }
   }
 
+  /// Scans ~/.ssh directory for private keys and allows importing them.
+  Future<void> _promptImportFromSsh(BuildContext context) async {
+    // Get home directory
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '';
+    if (home.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not determine home directory')),
+        );
+      }
+      return;
+    }
+
+    final sshDir = Directory('$home/.ssh');
+    if (!await sshDir.exists()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Directory not found: ${sshDir.path}')),
+        );
+      }
+      return;
+    }
+
+    // Scan for private key files
+    final keyFiles = <_SshKeyFile>[];
+    try {
+      await for (final entity in sshDir.list()) {
+        if (entity is File) {
+          final name = entity.path.split(Platform.pathSeparator).last;
+          // Skip public keys, known_hosts, config, etc.
+          if (name.endsWith('.pub') ||
+              name == 'known_hosts' ||
+              name == 'authorized_keys' ||
+              name == 'config') {
+            continue;
+          }
+
+          // Try to read and check if it looks like a private key
+          try {
+            final content = await entity.readAsString();
+            if (content.contains('PRIVATE KEY')) {
+              // Detect key type
+              String keyType = 'unknown';
+              if (content.contains('RSA PRIVATE KEY') ||
+                  content.contains('-----BEGIN RSA')) {
+                keyType = 'ssh-rsa';
+              } else if (content.contains('EC PRIVATE KEY') ||
+                  content.contains('-----BEGIN EC')) {
+                keyType = 'ecdsa';
+              } else if (content.contains('OPENSSH PRIVATE KEY')) {
+                // OpenSSH format - check the key data for type hints
+                if (name.contains('ed25519')) {
+                  keyType = 'ssh-ed25519';
+                } else if (name.contains('ecdsa')) {
+                  keyType = 'ecdsa';
+                } else if (name.contains('rsa')) {
+                  keyType = 'ssh-rsa';
+                } else {
+                  keyType = 'ssh-ed25519'; // Modern default
+                }
+              }
+
+              keyFiles.add(_SshKeyFile(
+                path: entity.path,
+                name: name,
+                content: content,
+                keyType: keyType,
+              ));
+            }
+          } catch (_) {
+            // Skip files that can't be read as text
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error scanning ~/.ssh: $e')),
+        );
+      }
+      return;
+    }
+
+    if (keyFiles.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No private keys found in ~/.ssh')),
+        );
+      }
+      return;
+    }
+
+    // Show selection dialog
+    if (!context.mounted) return;
+
+    final selected = await showDialog<List<_SshKeyFile>>(
+      context: context,
+      builder: (context) => _ImportSshKeysDialog(
+        keyFiles: keyFiles,
+        existingNames:
+            service.currentData?.identities.map((i) => i.name).toSet() ?? {},
+      ),
+    );
+
+    if (selected == null || selected.isEmpty) return;
+
+    // Import selected keys
+    int imported = 0;
+    for (final key in selected) {
+      try {
+        await service.addIdentity(
+          name: key.name,
+          type: key.keyType,
+          privateKey: key.content,
+        );
+        imported++;
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to import ${key.name}: $e')),
+          );
+        }
+      }
+    }
+
+    if (context.mounted && imported > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imported $imported key(s)')),
+      );
+    }
+  }
+
   void _connectHost(VaultHost host) {
     VaultIdentity? identity;
     for (final id
@@ -386,5 +526,122 @@ class HostsScreen extends StatelessWidget {
       }
     }
     onConnectHost(host, identity);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// SSH Key Import Support
+// -----------------------------------------------------------------------------
+
+/// Represents a private key file found in ~/.ssh
+class _SshKeyFile {
+  const _SshKeyFile({
+    required this.path,
+    required this.name,
+    required this.content,
+    required this.keyType,
+  });
+
+  final String path;
+  final String name;
+  final String content;
+  final String keyType;
+}
+
+/// Dialog for selecting SSH keys to import
+class _ImportSshKeysDialog extends StatefulWidget {
+  const _ImportSshKeysDialog({
+    required this.keyFiles,
+    required this.existingNames,
+  });
+
+  final List<_SshKeyFile> keyFiles;
+  final Set<String> existingNames;
+
+  @override
+  State<_ImportSshKeysDialog> createState() => _ImportSshKeysDialogState();
+}
+
+class _ImportSshKeysDialogState extends State<_ImportSshKeysDialog> {
+  final Set<String> _selected = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Import SSH Keys'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Found ${widget.keyFiles.length} private key(s) in ~/.ssh',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: widget.keyFiles.length,
+                itemBuilder: (context, index) {
+                  final key = widget.keyFiles[index];
+                  final alreadyExists = widget.existingNames.contains(key.name);
+                  return CheckboxListTile(
+                    value: _selected.contains(key.path),
+                    onChanged: alreadyExists
+                        ? null
+                        : (value) {
+                            setState(() {
+                              if (value == true) {
+                                _selected.add(key.path);
+                              } else {
+                                _selected.remove(key.path);
+                              }
+                            });
+                          },
+                    title: Text(key.name),
+                    subtitle: Text(
+                      alreadyExists
+                          ? 'Already imported'
+                          : '${key.keyType} • ${key.path}',
+                      style: TextStyle(
+                        color: alreadyExists
+                            ? Theme.of(context).colorScheme.outline
+                            : null,
+                      ),
+                    ),
+                    secondary: Icon(
+                      alreadyExists ? Icons.check_circle : Icons.vpn_key,
+                      color: alreadyExists
+                          ? Theme.of(context).colorScheme.outline
+                          : null,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _selected.isEmpty
+              ? null
+              : () {
+                  final selectedKeys = widget.keyFiles
+                      .where((k) => _selected.contains(k.path))
+                      .toList();
+                  Navigator.of(context).pop(selectedKeys);
+                },
+          child: Text('Import ${_selected.length} key(s)'),
+        ),
+      ],
+    );
   }
 }
