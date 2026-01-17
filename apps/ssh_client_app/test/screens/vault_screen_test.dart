@@ -1,22 +1,26 @@
+import 'package:core_vault/core_vault.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ssh_client_app/screens/vault_screen.dart';
 import 'package:ssh_client_app/services/vault_service.dart';
 
+import '../mocks/test_sync_manager.dart';
 import '../mocks/test_vault_service.dart';
 
 void main() {
   group('VaultScreen', () {
     late TestVaultService service;
+    late TestSyncManager syncManager;
 
     setUp(() {
       service = TestVaultService();
+      syncManager = TestSyncManager();
     });
 
     Widget buildTestWidget() {
       return MaterialApp(
         home: Scaffold(
-          body: VaultScreen(service: service),
+          body: VaultScreen(service: service, syncManager: syncManager),
         ),
       );
     }
@@ -31,39 +35,35 @@ void main() {
     testWidgets('shows all vault action buttons', (tester) async {
       await tester.pumpWidget(buildTestWidget());
 
-      expect(find.text('Create demo vault'), findsOneWidget);
-      expect(find.text('Unlock demo vault'), findsOneWidget);
-      expect(find.text('Pick vault file'), findsOneWidget);
-      expect(find.text('Create vault at path'), findsOneWidget);
-      expect(find.text('Quick create (app storage)'), findsOneWidget);
+      // New simplified UI buttons
+      expect(find.text('Setup Cloud Sync'), findsOneWidget);
+      expect(find.text('Open vault file'), findsOneWidget);
+      expect(find.text('Create new vault'), findsOneWidget);
     });
 
-    testWidgets('unlock demo vault button is disabled when no file path',
-        (tester) async {
+    testWidgets('shows setup cloud sync when not authenticated', (tester) async {
       await tester.pumpWidget(buildTestWidget());
 
-      // Find the button by its text and verify it exists
-      expect(find.text('Unlock demo vault'), findsOneWidget);
-
-      // The button should be disabled (no file path set)
-      // We verify this by checking the state is locked with no filePath
-      expect(service.state.value.filePath, isNull);
-    });
-
-    testWidgets('create demo vault updates state to unlocked', (tester) async {
-      await tester.pumpWidget(buildTestWidget());
-
-      await tester.tap(find.text('Create demo vault'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Status: unlocked'), findsOneWidget);
-      expect(find.textContaining('Demo vault created'), findsOneWidget);
+      // When not authenticated, shows setup button
+      expect(find.text('Setup Cloud Sync'), findsOneWidget);
     });
 
     testWidgets('shows host and identity count when unlocked', (tester) async {
-      await tester.pumpWidget(buildTestWidget());
+      // Set state to unlocked with mock data
+      final now = DateTime.now().toUtc().toIso8601String();
+      service.setDataForTest(VaultData(
+        version: 1,
+        revision: 1,
+        deviceId: 'test-device',
+        createdAt: now,
+        updatedAt: now,
+      ));
+      service.setStateForTest(const VaultState(
+        status: VaultStatus.unlocked,
+        message: 'Vault unlocked',
+      ));
 
-      await tester.tap(find.text('Create demo vault'));
+      await tester.pumpWidget(buildTestWidget());
       await tester.pumpAndSettle();
 
       expect(find.text('Hosts: 0 | Identities: 0'), findsOneWidget);
@@ -80,7 +80,6 @@ void main() {
 
       // Verify the state has a file path
       expect(service.state.value.filePath, equals('/test/path/vault.vlt'));
-      expect(find.text('Unlock demo vault'), findsOneWidget);
     });
 
     testWidgets('shows error status correctly', (tester) async {
