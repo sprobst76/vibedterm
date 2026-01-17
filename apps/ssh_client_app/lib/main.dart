@@ -170,17 +170,27 @@ class _HomeShellState extends State<HomeShell> {
           bottomNavigationBar: isWide
               ? null
               : NavigationBar(
-                  selectedIndex: _index,
-                  onDestinationSelected: _setIndex,
+                  selectedIndex: _index < 3 ? _index : 0,
+                  onDestinationSelected: (idx) {
+                    if (idx == 3) {
+                      _showSettingsDialog();
+                    } else {
+                      _setIndex(idx);
+                    }
+                  },
                   height: 60,
-                  destinations: _pages
-                      .map(
-                        (page) => NavigationDestination(
-                          icon: Icon(page.icon),
-                          label: page.label,
-                        ),
-                      )
-                      .toList(),
+                  destinations: [
+                    ..._pages.map(
+                      (page) => NavigationDestination(
+                        icon: Icon(page.icon),
+                        label: page.label,
+                      ),
+                    ),
+                    NavigationDestination(
+                      icon: _buildMobileSyncIcon(colorScheme),
+                      label: 'Settings',
+                    ),
+                  ],
                 ),
         );
       },
@@ -401,6 +411,52 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
+  Widget _buildMobileSyncIcon(ColorScheme colorScheme) {
+    return StreamBuilder<CombinedSyncStatus>(
+      stream: widget.syncManager.statusStream,
+      initialData: widget.syncManager.status,
+      builder: (context, snapshot) {
+        final status = snapshot.data ?? CombinedSyncStatus.disconnected;
+        final hasIssue = status.syncState == SyncState.conflict ||
+            status.syncState == SyncState.error;
+
+        return Stack(
+          children: [
+            const Icon(Icons.settings),
+            if (status.isAuthenticated && status.syncState == SyncState.syncing)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: SizedBox(
+                  width: 8,
+                  height: 8,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+            if (hasIssue)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: status.syncState == SyncState.conflict
+                        ? Colors.orange
+                        : colorScheme.error,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   void _handleConnectHost(VaultHost host, VaultIdentity? identity) {
     _vaultService.setPendingConnectHost(host, identity: identity);
     _setIndex(2);
@@ -525,21 +581,39 @@ class _SettingsDialogState extends State<_SettingsDialog>
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 500;
+
+    // Responsive sizing
+    final dialogWidth = isSmallScreen ? screenSize.width * 0.95 : 450.0;
+    final dialogHeight = isSmallScreen ? screenSize.height * 0.8 : 480.0;
+
     return AlertDialog(
       title: const Text('Settings'),
       contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 8 : 40,
+        vertical: isSmallScreen ? 24 : 24,
+      ),
       content: SizedBox(
-        width: 450,
-        height: 480,
+        width: dialogWidth,
+        height: dialogHeight,
         child: Column(
           children: [
             TabBar(
               controller: _tabController,
-              tabs: const [
-                Tab(text: 'Appearance', icon: Icon(Icons.palette_outlined)),
-                Tab(text: 'SSH', icon: Icon(Icons.terminal)),
-                Tab(text: 'Sync', icon: Icon(Icons.cloud_outlined)),
-              ],
+              // Use icons only on small screens
+              tabs: isSmallScreen
+                  ? const [
+                      Tab(icon: Icon(Icons.palette_outlined)),
+                      Tab(icon: Icon(Icons.terminal)),
+                      Tab(icon: Icon(Icons.cloud_outlined)),
+                    ]
+                  : const [
+                      Tab(text: 'Appearance', icon: Icon(Icons.palette_outlined)),
+                      Tab(text: 'SSH', icon: Icon(Icons.terminal)),
+                      Tab(text: 'Sync', icon: Icon(Icons.cloud_outlined)),
+                    ],
             ),
             Expanded(
               child: TabBarView(
