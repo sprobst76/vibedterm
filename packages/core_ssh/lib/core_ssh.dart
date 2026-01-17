@@ -1,3 +1,35 @@
+/// Core SSH library for VibedTerm SSH client.
+///
+/// This library provides SSH connection management with support for:
+/// - Password and key-based authentication
+/// - Interactive shell sessions with PTY
+/// - Remote command execution
+/// - Host key verification
+/// - Connection status events and logging
+///
+/// ## Usage
+///
+/// ```dart
+/// final manager = SshConnectionManager();
+///
+/// // Connect to a server
+/// await manager.connect(SshTarget(
+///   host: 'example.com',
+///   username: 'user',
+///   privateKey: '-----BEGIN OPENSSH PRIVATE KEY-----...',
+/// ));
+///
+/// // Start an interactive shell
+/// final shell = await manager.startShell();
+/// shell.stdout.listen((data) => print(utf8.decode(data)));
+/// await shell.writeString('ls -la\n');
+///
+/// // Or run a single command
+/// final result = await manager.runCommand('whoami');
+/// print(result.stdout);
+///
+/// await manager.disconnect();
+/// ```
 library core_ssh;
 
 import 'dart:async';
@@ -9,9 +41,26 @@ import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:meta/meta.dart';
 
-/// Represents a single SSH connection configuration.
+// =============================================================================
+// Connection Target
+// =============================================================================
+
+/// Configuration for an SSH connection.
+///
+/// Specifies the target host, authentication credentials, and connection
+/// options like keepalive interval and host key verification callback.
 @immutable
 class SshTarget {
+  /// Creates an SSH connection target.
+  ///
+  /// - [host]: The hostname or IP address to connect to
+  /// - [port]: SSH port (default: 22)
+  /// - [username]: Username for authentication
+  /// - [password]: Password for password authentication (optional)
+  /// - [privateKey]: PEM/OpenSSH private key for key authentication (optional)
+  /// - [passphrase]: Passphrase for encrypted private keys
+  /// - [keepAliveInterval]: Interval for keepalive packets (null to disable)
+  /// - [onHostKeyVerify]: Callback to verify host keys (return true to accept)
   const SshTarget({
     required this.host,
     this.port = 22,
@@ -23,56 +72,119 @@ class SshTarget {
     this.onHostKeyVerify,
   });
 
+  /// Target hostname or IP address.
   final String host;
+
+  /// SSH port (default: 22).
   final int port;
+
+  /// Username for authentication.
   final String username;
+
+  /// Password for password authentication.
   final String? password;
+
+  /// PEM or OpenSSH formatted private key.
   final String? privateKey;
+
+  /// Passphrase for encrypted private keys.
   final String? passphrase;
+
+  /// Interval between keepalive packets (null to disable).
   final Duration? keepAliveInterval;
+
+  /// Callback to verify host keys. Return true to accept the key.
+  ///
+  /// The callback receives the key type (e.g., "ssh-ed25519") and the
+  /// fingerprint in colon-separated hex format.
   final FutureOr<bool> Function(String type, String fingerprint)? onHostKeyVerify;
 }
 
-/// High-level connection status.
+// =============================================================================
+// Status and Errors
+// =============================================================================
+
+/// High-level SSH connection status.
+///
+/// - [disconnected]: No active connection
+/// - [connecting]: Connection in progress
+/// - [connected]: Successfully connected
+/// - [error]: Connection failed or was lost
 enum SshConnectionStatus { disconnected, connecting, connected, error }
 
-/// Error classification to simplify UI messaging.
+/// Classification of SSH errors for UI messaging.
+///
+/// Helps the UI display appropriate error messages and recovery options.
 enum SshErrorKind {
+  /// Authentication failed (wrong password or key rejected).
   authFailed,
+
+  /// SSH protocol handshake failed.
   handshakeFailed,
+
+  /// Host key verification failed or was rejected by user.
   hostKeyRejected,
+
+  /// Could not reach the host (network error, DNS failure, etc.).
   hostUnreachable,
+
+  /// Connection was lost or closed unexpectedly.
   disconnected,
+
+  /// Unknown or unclassified error.
   unknown,
 }
 
-/// Structured SSH errors with a user-friendly message.
+/// Exception thrown when SSH operations fail.
+///
+/// Contains a [kind] for classification, a human-readable [message],
+/// and optionally the original [cause] exception.
 class SshException implements Exception {
+  /// Creates an SSH exception.
   SshException(this.kind, this.message, [this.cause]);
 
+  /// Error classification for UI handling.
   final SshErrorKind kind;
+
+  /// Human-readable error description.
   final String message;
+
+  /// Original exception that caused this error.
   final Object? cause;
 
   @override
   String toString() => 'SshException($kind, $message)';
 }
 
-/// Result of a remote command execution.
+// =============================================================================
+// Command and Shell Sessions
+// =============================================================================
+
+/// Result of executing a remote command via SSH.
 class SshCommandResult {
+  /// Creates a command result.
   const SshCommandResult({
     required this.stdout,
     required this.stderr,
     required this.exitCode,
   });
 
+  /// Standard output from the command.
   final String stdout;
+
+  /// Standard error from the command.
   final String stderr;
+
+  /// Exit code (null if not available).
   final int? exitCode;
 }
 
-/// Interactive shell session handle.
+/// Handle to an interactive SSH shell session.
+///
+/// Provides streams for stdout/stderr, methods for writing input,
+/// resizing the terminal, and closing the session.
 class SshShellSession {
+  /// Creates a shell session handle.
   SshShellSession({
     required this.stdout,
     required this.stderr,
@@ -82,19 +194,32 @@ class SshShellSession {
     required this.done,
   });
 
+  /// Stream of stdout data from the remote shell.
   final Stream<List<int>> stdout;
+
+  /// Stream of stderr data from the remote shell.
   final Stream<List<int>> stderr;
+
+  /// Writes raw bytes to the shell's stdin.
   final Future<void> Function(List<int> data) write;
+
+  /// Closes the shell session.
   final Future<void> Function() close;
+
+  /// Resizes the PTY to the given dimensions.
   final void Function(int width, int height) resize;
+
+  /// Future that completes when the shell session ends.
   final Future<void> done;
 
+  /// Writes a string to the shell's stdin.
   Future<void> writeString(String text) => write(utf8.encode(text));
 }
 
-/// Minimal PTY configuration wrapper for shells.
+/// PTY (pseudo-terminal) configuration for shell sessions.
 @immutable
 class SshPtyConfig {
+  /// Creates PTY configuration.
   const SshPtyConfig({
     this.term = 'xterm-256color',
     this.width = 80,
@@ -103,12 +228,22 @@ class SshPtyConfig {
     this.pixelHeight = 0,
   });
 
+  /// Terminal type (default: "xterm-256color").
   final String term;
+
+  /// Terminal width in columns.
   final int width;
+
+  /// Terminal height in rows.
   final int height;
+
+  /// Terminal width in pixels (optional, for graphical terminals).
   final int pixelWidth;
+
+  /// Terminal height in pixels (optional, for graphical terminals).
   final int pixelHeight;
 
+  /// Converts to dartssh2's PTY config format.
   SSHPtyConfig toSsh() => SSHPtyConfig(
         type: term,
         width: width,
@@ -118,19 +253,52 @@ class SshPtyConfig {
       );
 }
 
-/// Adapter interface to abstract the underlying SSH client implementation.
+// =============================================================================
+// Connection Manager
+// =============================================================================
+
+/// Interface for SSH client implementations.
+///
+/// Allows mocking the SSH client for testing purposes.
 abstract class SshClientAdapter {
+  /// Executes a command and returns the result.
   Future<SshCommandResult> run(String command);
+
+  /// Starts an interactive shell session.
   Future<SshShellSession> startShell({SshPtyConfig ptyConfig});
+
+  /// Disconnects and cleans up resources.
   Future<void> disconnect();
 }
 
+/// Factory function for creating SSH client adapters.
 typedef SshClientFactory = Future<SshClientAdapter> Function(
   SshTarget target,
   void Function(String message) log,
 );
 
-/// Connection manager that wraps dartssh2 and exposes higher level events.
+/// High-level SSH connection manager.
+///
+/// Wraps the dartssh2 library and provides:
+/// - Connection lifecycle management
+/// - Status change notifications via [statusStream]
+/// - Debug logging via [logs]
+/// - Error mapping to [SshException]
+///
+/// ## Example
+///
+/// ```dart
+/// final manager = SshConnectionManager();
+///
+/// // Listen to status changes
+/// manager.statusStream.listen((status) {
+///   print('Status: $status');
+/// });
+///
+/// // Connect and start a shell
+/// await manager.connect(target);
+/// final shell = await manager.startShell();
+/// ```
 class SshConnectionManager {
   SshConnectionManager({SshClientFactory? clientFactory})
       : _clientFactory = clientFactory ?? _defaultClientFactory;

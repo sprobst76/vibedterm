@@ -1,3 +1,42 @@
+/// Core vault library for VibedTerm SSH client.
+///
+/// This library provides encrypted vault functionality for storing SSH credentials,
+/// host configurations, and user settings. It implements a zero-knowledge
+/// architecture where all sensitive data is encrypted client-side before storage.
+///
+/// ## Features
+///
+/// - **Strong encryption**: Uses Argon2id for key derivation and XChaCha20-Poly1305
+///   or AES-256-GCM for authenticated encryption
+/// - **Binary vault format**: Compact header with KDF parameters followed by
+///   encrypted JSON payload
+/// - **Atomic writes**: Uses temp file + rename pattern to prevent data corruption
+/// - **Version migration**: Built-in support for upgrading vault formats
+///
+/// ## Usage
+///
+/// ```dart
+/// // Create a new vault
+/// final vault = await VaultFile.create(
+///   file: File('my_vault.vlt'),
+///   password: 'secure_password',
+///   payload: VaultPayload(data: VaultData(...)),
+/// );
+///
+/// // Open an existing vault
+/// final vault = await VaultFile.open(
+///   file: File('my_vault.vlt'),
+///   password: 'secure_password',
+/// );
+///
+/// // Add a host and save
+/// vault.upsertHost(VaultHost(...));
+/// await vault.save();
+/// ```
+///
+/// ## Binary Format
+///
+/// See `docs/vault_spec_v1.md` for the complete binary format specification.
 library core_vault;
 
 import 'dart:convert';
@@ -7,20 +46,42 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:meta/meta.dart';
 
-const _magic = [0x56, 0x42, 0x54, 0x31]; // ASCII "VBT1"
-const _headerFixedBytes = 36; // up to and including nonce length byte.
+// Magic bytes identifying a VibedTerm vault file (ASCII "VBT1")
+const _magic = [0x56, 0x42, 0x54, 0x31];
+
+// Fixed portion of header before variable-length nonce
+const _headerFixedBytes = 36;
+
+// Bytes used to store payload length in header
 const _payloadLengthBytes = 4;
+
+// Default salt length for KDF (128 bits)
 const _defaultSaltLength = 16;
+
+// Derived key length (256 bits)
 const _defaultKeyLength = 32;
 
-/// Supported KDF algorithms.
+/// Key derivation function algorithms supported by the vault.
+///
+/// - [argon2id]: Memory-hard KDF resistant to GPU/ASIC attacks (recommended)
+/// - [scrypt]: Alternative memory-hard KDF (not currently implemented)
 enum KdfKind { argon2id, scrypt }
 
-/// Supported ciphers for the vault payload.
+/// Symmetric cipher algorithms for encrypting the vault payload.
+///
+/// - [xchacha20Poly1305]: Extended-nonce ChaCha20 with Poly1305 MAC (recommended)
+/// - [aes256Gcm]: AES-256 in Galois/Counter Mode
 enum CipherKind { xchacha20Poly1305, aes256Gcm }
 
-/// Errors thrown when vault operations fail.
+// =============================================================================
+// Exceptions
+// =============================================================================
+
+/// Exception thrown when vault operations fail.
+///
+/// This includes decryption failures, file I/O errors, and format violations.
 class VaultException implements Exception {
+  /// Creates a vault exception with the given [message].
   VaultException(this.message);
   final String message;
 
@@ -28,12 +89,40 @@ class VaultException implements Exception {
   String toString() => 'VaultException: $message';
 }
 
-/// Validation errors for vault data.
+/// Exception thrown when vault data fails validation.
+///
+/// This includes missing required fields, invalid references, and constraint
+/// violations like duplicate IDs.
 class VaultValidationException extends VaultException {
+  /// Creates a validation exception with the given [message].
   VaultValidationException(super.message);
 }
 
-/// Header metadata defined in docs/vault_spec_v1.md.
+// =============================================================================
+// Header
+// =============================================================================
+
+/// Binary header for vault files containing encryption metadata.
+///
+/// The header stores all parameters needed to derive the encryption key and
+/// decrypt the payload. It is stored unencrypted at the beginning of the vault
+/// file and is authenticated as additional data (AAD) during encryption.
+///
+/// ## Header Structure (see docs/vault_spec_v1.md)
+///
+/// | Offset | Size | Description |
+/// |--------|------|-------------|
+/// | 0      | 4    | Magic bytes "VBT1" |
+/// | 4      | 1    | Version (currently 1) |
+/// | 5      | 1    | KDF algorithm ID |
+/// | 6      | 4    | KDF memory (KiB) |
+/// | 10     | 4    | KDF iterations |
+/// | 14     | 4    | KDF parallelism |
+/// | 18     | 16   | KDF salt |
+/// | 34     | 1    | Cipher algorithm ID |
+/// | 35     | 1    | Nonce length |
+/// | 36     | N    | Nonce (variable) |
+/// | 36+N   | 4    | Payload length |
 @immutable
 class VaultHeader {
   const VaultHeader({
@@ -142,9 +231,34 @@ class VaultHeader {
   }
 }
 
-/// Represents a host identity (SSH key).
+// =============================================================================
+// Data Models
+// =============================================================================
+
+/// An SSH identity (private key) stored in the vault.
+///
+/// Identities can be linked to hosts via [VaultHost.identityId] for automatic
+/// key-based authentication.
+///
+/// ## Example
+///
+/// ```dart
+/// final identity = VaultIdentity(
+///   id: 'id_ed25519_work',
+///   name: 'Work SSH Key',
+///   type: 'ssh-ed25519',
+///   privateKey: '-----BEGIN OPENSSH PRIVATE KEY-----\n...',
+/// );
+/// ```
 @immutable
 class VaultIdentity {
+  /// Creates a new vault identity.
+  ///
+  /// - [id]: Unique identifier for this identity
+  /// - [name]: Human-readable display name
+  /// - [type]: Key type (e.g., "ssh-rsa", "ssh-ed25519", "ecdsa")
+  /// - [privateKey]: PEM or OpenSSH formatted private key
+  /// - [passphrase]: Optional passphrase if the key is encrypted
   const VaultIdentity({
     required this.id,
     required this.name,
@@ -155,12 +269,25 @@ class VaultIdentity {
     this.updatedAt,
   });
 
+  /// Unique identifier for this identity.
   final String id;
+
+  /// Human-readable display name.
   final String name;
-  final String type; // e.g., "ssh-rsa", "ssh-ed25519".
-  final String privateKey; // PEM or OpenSSH private key.
+
+  /// SSH key type (e.g., "ssh-rsa", "ssh-ed25519", "ecdsa").
+  final String type;
+
+  /// PEM or OpenSSH formatted private key.
+  final String privateKey;
+
+  /// Optional passphrase if the private key is encrypted.
   final String? passphrase;
+
+  /// ISO 8601 timestamp when this identity was created.
   final String? createdAt;
+
+  /// ISO 8601 timestamp when this identity was last updated.
   final String? updatedAt;
 
   Map<String, dynamic> toJson() => {
@@ -205,9 +332,13 @@ class VaultIdentity {
   }
 }
 
-/// Reusable snippets stored in the vault (e.g., command templates).
+/// A reusable command snippet stored in the vault.
+///
+/// Snippets allow users to save frequently used commands or text templates
+/// for quick insertion into terminal sessions.
 @immutable
 class VaultSnippet {
+  /// Creates a new snippet.
   const VaultSnippet({
     required this.id,
     required this.title,
@@ -217,11 +348,22 @@ class VaultSnippet {
     this.updatedAt,
   });
 
+  /// Unique identifier for this snippet.
   final String id;
+
+  /// Display title for the snippet.
   final String title;
+
+  /// The actual snippet content/command.
   final String content;
+
+  /// Optional tags for categorization and search.
   final List<String> tags;
+
+  /// ISO 8601 timestamp when this snippet was created.
   final String? createdAt;
+
+  /// ISO 8601 timestamp when this snippet was last updated.
   final String? updatedAt;
 
   Map<String, dynamic> toJson() => {
@@ -245,9 +387,13 @@ class VaultSnippet {
   }
 }
 
-/// User preferences/settings stored in the vault.
+/// User preferences and settings stored in the vault.
+///
+/// Settings are synced across devices when using cloud sync, ensuring
+/// a consistent experience everywhere.
 @immutable
 class VaultSettings {
+  /// Creates vault settings with default values.
   const VaultSettings({
     this.theme = 'system',
     this.fontSize = 14,
@@ -257,28 +403,46 @@ class VaultSettings {
     this.terminalFontFamily = 'monospace',
     this.terminalOpacity = 1.0,
     this.terminalCursorStyle = 'block',
-    // SSH settings
     this.sshKeepaliveInterval = 30,
     this.sshConnectionTimeout = 30,
     this.sshDefaultPort = 22,
     this.sshAutoReconnect = false,
   });
 
-  final String theme; // e.g., system/light/dark (app theme)
+  /// App theme mode: "system", "light", or "dark".
+  final String theme;
+
+  /// Base font size for UI elements.
   final int fontSize;
+
+  /// Whether to show extra keys toolbar on mobile.
   final bool extraKeys;
 
-  // Terminal-specific settings
-  final String terminalTheme; // e.g., default, solarized-dark, solarized-light, monokai, dracula
-  final double terminalFontSize;
-  final String terminalFontFamily; // e.g., monospace, Cascadia Code, Fira Code
-  final double terminalOpacity; // 0.0 - 1.0
-  final String terminalCursorStyle; // block, underline, bar
+  /// Terminal color theme name (e.g., "default", "solarized-dark", "monokai").
+  final String terminalTheme;
 
-  // SSH settings
-  final int sshKeepaliveInterval; // seconds, 0 = disabled
-  final int sshConnectionTimeout; // seconds
+  /// Terminal font size in points.
+  final double terminalFontSize;
+
+  /// Terminal font family (e.g., "monospace", "Cascadia Code", "Fira Code").
+  final String terminalFontFamily;
+
+  /// Terminal background opacity (0.0 - 1.0).
+  final double terminalOpacity;
+
+  /// Cursor style: "block", "underline", or "bar".
+  final String terminalCursorStyle;
+
+  /// SSH keepalive interval in seconds (0 = disabled).
+  final int sshKeepaliveInterval;
+
+  /// SSH connection timeout in seconds.
+  final int sshConnectionTimeout;
+
+  /// Default SSH port for new hosts.
   final int sshDefaultPort;
+
+  /// Whether to automatically reconnect on connection loss.
   final bool sshAutoReconnect;
 
   Map<String, dynamic> toJson() => {
@@ -378,9 +542,18 @@ class VaultSettings {
       sshAutoReconnect.hashCode;
 }
 
-/// Handles version upgrades of vault payloads.
+// =============================================================================
+// Migration
+// =============================================================================
+
+/// Handles version upgrades of vault data.
+///
+/// When the vault format changes in future versions, this class will contain
+/// the migration logic to upgrade older vaults to the current format.
 abstract class VaultMigrator {
-  /// Applies migrations and returns a payload compatible with the current code.
+  /// Applies any necessary migrations to [data] and returns a compatible version.
+  ///
+  /// Throws [VaultException] if the data version is not supported.
   static VaultData migrate(VaultData data) {
     // Only v1 is supported today; future versions would branch here.
     if (data.version != 1) {
@@ -390,9 +563,28 @@ abstract class VaultMigrator {
   }
 }
 
-/// Represents a host entry.
+/// An SSH host entry stored in the vault.
+///
+/// Hosts define connection targets with their hostname, port, username,
+/// and optionally a linked identity for key-based authentication.
+///
+/// ## Example
+///
+/// ```dart
+/// final host = VaultHost(
+///   id: 'server-prod',
+///   label: 'Production Server',
+///   hostname: 'prod.example.com',
+///   port: 22,
+///   username: 'deploy',
+///   identityId: 'id_ed25519_work',
+///   tmuxEnabled: true,
+///   tmuxSessionName: 'main',
+/// );
+/// ```
 @immutable
 class VaultHost {
+  /// Creates a new host entry.
   const VaultHost({
     required this.id,
     required this.label,
@@ -407,18 +599,37 @@ class VaultHost {
     this.updatedAt,
   });
 
+  /// Unique identifier for this host.
   final String id;
+
+  /// Human-readable display name.
   final String label;
+
+  /// Server hostname or IP address.
   final String hostname;
+
+  /// SSH port (default: 22).
   final int port;
+
+  /// Username for SSH authentication.
   final String username;
-  final String? identityId; // references VaultIdentity.id
+
+  /// Optional reference to a [VaultIdentity.id] for key-based authentication.
+  final String? identityId;
+
+  /// Optional tags for categorization and filtering.
   final List<String> tags;
-  /// Whether to auto-attach to tmux on connect.
+
+  /// Whether to automatically attach to tmux on connect.
   final bool tmuxEnabled;
-  /// Optional tmux session name (uses default if null).
+
+  /// Custom tmux session name (uses default if null).
   final String? tmuxSessionName;
+
+  /// ISO 8601 timestamp when this host was created.
   final String? createdAt;
+
+  /// ISO 8601 timestamp when this host was last updated.
   final String? updatedAt;
 
   Map<String, dynamic> toJson() => {
@@ -479,9 +690,19 @@ class VaultHost {
   }
 }
 
-/// Vault data container with metadata and collections.
+/// The main data container stored in the encrypted vault payload.
+///
+/// Contains all hosts, identities, snippets, and settings along with
+/// sync metadata (revision, deviceId, timestamps).
+///
+/// ## Sync Conflict Detection
+///
+/// The [revision] field is incremented on every change and used to detect
+/// conflicts during cloud sync. If two devices have different revisions,
+/// the sync system can identify conflicting changes.
 @immutable
 class VaultData {
+  /// Creates a new vault data container.
   const VaultData({
     required this.version,
     required this.revision,
@@ -495,15 +716,34 @@ class VaultData {
     this.meta = const <String, dynamic>{},
   });
 
+  /// Data format version (currently 1).
   final int version;
+
+  /// Monotonically increasing revision number for sync conflict detection.
   final int revision;
+
+  /// Unique identifier for the device that created this vault.
   final String deviceId;
+
+  /// ISO 8601 timestamp when this vault was created.
   final String createdAt;
+
+  /// ISO 8601 timestamp when this vault was last updated.
   final String updatedAt;
+
+  /// List of SSH host entries.
   final List<VaultHost> hosts;
+
+  /// List of SSH identities (private keys).
   final List<VaultIdentity> identities;
+
+  /// List of command snippets.
   final List<VaultSnippet> snippets;
+
+  /// User preferences and settings.
   final VaultSettings settings;
+
+  /// Arbitrary metadata (e.g., trusted host keys).
   final Map<String, dynamic> meta;
 
   VaultData copyWith({
@@ -573,28 +813,51 @@ class VaultData {
   }
 }
 
-/// Holds vault contents in memory.
+/// Wrapper around [VaultData] for serialization to/from bytes.
+///
+/// The payload is the decrypted JSON content stored in the vault file.
+/// It handles serialization and applies any necessary migrations when
+/// loading older vault formats.
 @immutable
 class VaultPayload {
+  /// Creates a payload containing the given [data].
   const VaultPayload({
     required this.data,
   });
 
+  /// The vault data contained in this payload.
   final VaultData data;
 
+  /// Deserializes a payload from decrypted bytes.
+  ///
+  /// Applies any necessary migrations to upgrade older vault formats.
   factory VaultPayload.fromBytes(Uint8List bytes) {
     final decoded = json.decode(utf8.decode(bytes)) as Map<String, dynamic>;
     final data = VaultMigrator.migrate(VaultData.fromJson(decoded));
     return VaultPayload(data: data);
   }
 
+  /// Serializes the payload to bytes for encryption.
   Uint8List toBytes() => Uint8List.fromList(utf8.encode(rawJson));
 
+  /// The raw JSON string representation of the payload.
   String get rawJson => json.encode(data.toJson());
 }
 
-/// Configuration for creating a new vault.
+// =============================================================================
+// Vault File
+// =============================================================================
+
+/// Configuration options for creating a new vault.
+///
+/// Allows customizing the KDF parameters and cipher algorithm. The defaults
+/// provide a good balance of security and performance on modern devices.
 class VaultCreateConfig {
+  /// Creates a vault configuration with the given parameters.
+  ///
+  /// Default values:
+  /// - KDF: Argon2id with 64 MiB memory, 3 iterations
+  /// - Cipher: XChaCha20-Poly1305
   const VaultCreateConfig({
     this.kdfKind = KdfKind.argon2id,
     this.kdfMemoryKiB = 65536,
@@ -603,14 +866,54 @@ class VaultCreateConfig {
     this.cipherKind = CipherKind.xchacha20Poly1305,
   });
 
+  /// Key derivation function algorithm.
   final KdfKind kdfKind;
+
+  /// Memory usage for KDF in kibibytes (default: 64 MiB).
   final int kdfMemoryKiB;
+
+  /// Number of KDF iterations (default: 3).
   final int kdfIterations;
+
+  /// KDF parallelism/lanes (default: 1).
   final int kdfParallelism;
+
+  /// Cipher algorithm for payload encryption.
   final CipherKind cipherKind;
 }
 
-/// Main entry point to create/open/save vault files.
+/// Main entry point for creating, opening, and saving encrypted vault files.
+///
+/// A vault file consists of a binary header (unencrypted, but authenticated)
+/// followed by the encrypted JSON payload containing hosts, identities, and
+/// settings.
+///
+/// ## Creating a New Vault
+///
+/// ```dart
+/// final vault = await VaultFile.create(
+///   file: File('credentials.vlt'),
+///   password: 'secure_password',
+///   payload: VaultPayload(data: VaultData(...)),
+/// );
+/// ```
+///
+/// ## Opening an Existing Vault
+///
+/// ```dart
+/// final vault = await VaultFile.open(
+///   file: File('credentials.vlt'),
+///   password: 'secure_password',
+/// );
+/// print('Hosts: ${vault.payload.data.hosts.length}');
+/// ```
+///
+/// ## Modifying and Saving
+///
+/// ```dart
+/// vault.upsertHost(newHost);
+/// await vault.save();
+/// ```
 class VaultFile {
   VaultFile({
     required this.file,

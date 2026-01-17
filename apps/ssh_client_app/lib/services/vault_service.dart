@@ -1,3 +1,12 @@
+/// Vault orchestration service for VibedTerm.
+///
+/// This service manages the lifecycle of encrypted vault files:
+/// - Creating new vaults with password protection
+/// - Unlocking existing vaults
+/// - Managing hosts, identities, and settings
+/// - Persisting vault path and password preferences
+/// - Trusted host key management
+
 import 'dart:io';
 
 import 'package:core_vault/core_vault.dart';
@@ -10,7 +19,45 @@ import 'vault_service_interface.dart';
 
 export 'vault_service_interface.dart' show VaultStatus, VaultState, VaultServiceInterface;
 
-/// Minimal vault orchestrator for the demo screens.
+/// Vault orchestration service.
+///
+/// Manages encrypted vault files containing SSH hosts, identities, and settings.
+/// Uses [ValueNotifier] to broadcast state changes to the UI.
+///
+/// ## Password Storage Options
+///
+/// When unlocking a vault, passwords can be:
+/// - Not stored (user enters each time)
+/// - Stored for session only (cleared on app restart)
+/// - Stored securely in device keychain (auto-unlock on next launch)
+///
+/// ## Example
+///
+/// ```dart
+/// final service = VaultService();
+/// await service.init();
+///
+/// // Listen to state changes
+/// service.state.addListener(() {
+///   if (service.state.value.status == VaultStatus.unlocked) {
+///     // Vault is ready to use
+///   }
+/// });
+///
+/// // Create a new vault
+/// await service.createVault(
+///   path: '/path/to/vault.vlt',
+///   password: 'secure_password',
+///   payload: VaultPayload(data: VaultData(...)),
+/// );
+///
+/// // Add a host
+/// await service.addHost(
+///   label: 'My Server',
+///   hostname: 'server.example.com',
+///   username: 'admin',
+/// );
+/// ```
 class VaultService implements VaultServiceInterface {
   VaultService();
 

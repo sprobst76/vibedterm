@@ -1,3 +1,45 @@
+/// Terminal UI components for VibedTerm SSH client.
+///
+/// This library provides terminal widgets and theme management, wrapping the
+/// xterm package with additional features like:
+/// - Predefined color theme presets (Solarized, Monokai, Dracula, Nord, etc.)
+/// - Theme-to-ThemeData conversion for consistent app styling
+/// - SSH stream bridging to terminal display
+/// - Cross-platform keyboard input handling
+///
+/// ## Usage
+///
+/// ```dart
+/// // Create a terminal bridge
+/// final bridge = TerminalBridge();
+///
+/// // Attach SSH streams
+/// bridge.attachStreams(stdout: sshSession.stdout, stderr: sshSession.stderr);
+///
+/// // Forward user input to SSH
+/// bridge.onOutput = (data) => sshSession.write(utf8.encode(data));
+///
+/// // Display in widget tree
+/// VibedTerminalView(
+///   bridge: bridge,
+///   themeName: 'dracula',
+///   fontSize: 14.0,
+/// )
+/// ```
+///
+/// ## Theme Integration
+///
+/// Terminal themes can be used to style the entire app:
+///
+/// ```dart
+/// final termTheme = TerminalThemePresets.getTheme('monokai');
+/// final appTheme = TerminalThemeConverter.toFlutterTheme(termTheme);
+///
+/// MaterialApp(
+///   theme: appTheme,
+///   // ...
+/// )
+/// ```
 library ui_terminal;
 
 import 'dart:async';
@@ -10,18 +52,34 @@ import 'package:xterm/xterm.dart';
 // Re-export xterm types needed by consumers
 export 'package:xterm/xterm.dart' show TerminalTheme, TerminalStyle;
 
-/// Available terminal cursor styles.
+// =============================================================================
+// Terminal Configuration
+// =============================================================================
+
+/// Terminal cursor display styles.
 enum TerminalCursorStyle {
+  /// Solid block cursor.
   block,
+
+  /// Underline cursor.
   underline,
+
+  /// Vertical bar (I-beam) cursor.
   bar,
 }
 
+// =============================================================================
+// Theme Presets
+// =============================================================================
+
 /// Predefined terminal color themes.
+///
+/// Provides 12 popular color schemes including both dark and light themes.
+/// Use [getTheme] to get a theme by name, or access individual themes directly.
 class TerminalThemePresets {
   TerminalThemePresets._();
 
-  /// Available theme names.
+  /// List of all available theme names.
   static const List<String> themeNames = [
     'default',
     'solarized-dark',
@@ -393,7 +451,14 @@ class TerminalThemePresets {
   );
 }
 
-/// Helper to create Flutter ThemeData from a TerminalTheme.
+// =============================================================================
+// Theme Conversion
+// =============================================================================
+
+/// Converts terminal themes to Flutter [ThemeData].
+///
+/// This enables the entire app to be styled consistently with the terminal,
+/// deriving colors for buttons, dialogs, inputs, etc. from the terminal palette.
 class TerminalThemeConverter {
   TerminalThemeConverter._();
 
@@ -583,8 +648,38 @@ class TerminalThemeConverter {
   }
 }
 
-/// Controller to bridge SSH streams into an xterm instance.
+// =============================================================================
+// Terminal Bridge
+// =============================================================================
+
+/// Bridges SSH streams to an xterm [Terminal] instance.
+///
+/// The bridge handles:
+/// - Attaching SSH stdout/stderr to terminal display
+/// - Forwarding user input from terminal to SSH stdin
+/// - Terminal resizing
+///
+/// ## Example
+///
+/// ```dart
+/// final bridge = TerminalBridge();
+///
+/// // Connect SSH streams
+/// bridge.attachStreams(
+///   stdout: sshSession.stdout,
+///   stderr: sshSession.stderr,
+/// );
+///
+/// // Forward user input to SSH
+/// bridge.onOutput = (data) async {
+///   await sshSession.write(utf8.encode(data));
+/// };
+///
+/// // Resize terminal when window changes
+/// bridge.resize(80, 24);
+/// ```
 class TerminalBridge {
+  /// Creates a terminal bridge with an optional existing terminal.
   TerminalBridge({Terminal? initialTerminal})
       : terminal = initialTerminal ??
             Terminal(
@@ -595,13 +690,19 @@ class TerminalBridge {
     };
   }
 
+  /// The underlying xterm Terminal instance.
   final Terminal terminal;
+
   final List<StreamSubscription<List<int>>> _subscriptions = [];
 
-  /// Called when the user types into the terminal; forward to SSH stdin.
+  /// Callback invoked when the user types into the terminal.
+  ///
+  /// Forward this data to the SSH session's stdin.
   void Function(String data)? onOutput;
 
-  /// Attach stdout/stderr streams from SSH and write into terminal.
+  /// Attaches SSH stdout/stderr streams to the terminal display.
+  ///
+  /// Data from these streams is decoded as UTF-8 and written to the terminal.
   void attachStreams({
     required Stream<List<int>> stdout,
     required Stream<List<int>> stderr,
@@ -685,8 +786,32 @@ class TerminalBridge {
   }
 }
 
-/// Terminal widget built on xterm.
+// =============================================================================
+// Terminal Widget
+// =============================================================================
+
+/// Terminal display widget built on xterm.
+///
+/// Provides a fully functional terminal view with:
+/// - Configurable color themes
+/// - Adjustable font size and family
+/// - Multiple cursor styles
+/// - Cross-platform keyboard input handling
+/// - Selection and copy support
+///
+/// ## Example
+///
+/// ```dart
+/// VibedTerminalView(
+///   bridge: bridge,
+///   themeName: 'dracula',
+///   fontSize: 14.0,
+///   fontFamily: 'Fira Code',
+///   cursorStyle: TerminalCursorStyle.bar,
+/// )
+/// ```
 class VibedTerminalView extends StatefulWidget {
+  /// Creates a terminal view widget.
   const VibedTerminalView({
     super.key,
     required this.bridge,
@@ -699,20 +824,25 @@ class VibedTerminalView extends StatefulWidget {
     this.cursorStyle = TerminalCursorStyle.block,
   });
 
+  /// The terminal bridge connecting SSH streams to the display.
   final TerminalBridge bridge;
+
+  /// Optional focus node for keyboard input.
   final FocusNode? focusNode;
+
+  /// Whether to automatically focus on build (may cause issues on some platforms).
   final bool autofocus;
 
-  /// Terminal color theme name (from TerminalThemePresets).
+  /// Terminal color theme name (from [TerminalThemePresets]).
   final String themeName;
 
-  /// Font size for terminal text.
+  /// Font size in points for terminal text.
   final double fontSize;
 
-  /// Font family for terminal text (null uses default monospace).
+  /// Font family for terminal text (null uses system monospace).
   final String? fontFamily;
 
-  /// Background opacity (0.0 to 1.0).
+  /// Background opacity (0.0 = transparent, 1.0 = opaque).
   final double opacity;
 
   /// Cursor display style.

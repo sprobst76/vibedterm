@@ -1,3 +1,39 @@
+/// Cloud sync manager for VibedTerm.
+///
+/// This service orchestrates vault synchronization with a backend server,
+/// combining authentication and sync functionality into a unified interface.
+///
+/// ## Features
+///
+/// - Server configuration and persistence
+/// - User authentication with TOTP support
+/// - Vault push/pull with revision tracking
+/// - Conflict detection and resolution
+/// - Combined status stream for UI updates
+///
+/// ## Example
+///
+/// ```dart
+/// final syncManager = SyncManager();
+/// await syncManager.init();
+///
+/// // Configure server
+/// await syncManager.configure('https://sync.example.com');
+///
+/// // Login
+/// await syncManager.login(
+///   email: 'user@example.com',
+///   password: 'password',
+///   deviceName: 'My Device',
+///   deviceType: 'android',
+/// );
+///
+/// // Sync vault
+/// final result = await syncManager.syncVault(
+///   vaultFilePath: '/path/to/vault.vlt',
+/// );
+/// ```
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,10 +42,10 @@ import 'package:core_sync/core_sync.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Manages cloud sync for the vault.
+/// Manages cloud synchronization for the vault.
 ///
-/// This class orchestrates the AuthService and SyncService from core_sync
-/// to provide vault synchronization with the server.
+/// Orchestrates [AuthService] and [SyncService] from core_sync to provide
+/// a unified sync interface with combined status updates.
 class SyncManager {
   SyncManager({
     SyncConfig? config,
@@ -325,9 +361,13 @@ class SyncManager {
   }
 }
 
-/// Combined status from auth and sync services.
+/// Combined authentication and sync status.
+///
+/// Provides a unified view of the sync system state for UI updates,
+/// combining auth state, sync state, and relevant metadata.
 @immutable
 class CombinedSyncStatus {
+  /// Creates a combined sync status.
   const CombinedSyncStatus({
     required this.authState,
     required this.syncState,
@@ -339,21 +379,44 @@ class CombinedSyncStatus {
     this.conflictInfo,
   });
 
+  /// Current authentication state.
   final AuthState authState;
+
+  /// Current sync operation state.
   final SyncState syncState;
+
+  /// Logged in user info (if authenticated).
   final SyncUser? user;
+
+  /// Timestamp of last successful sync.
   final DateTime? lastSyncAt;
+
+  /// Local vault revision number.
   final int? localRevision;
+
+  /// Server vault revision number.
   final int? serverRevision;
+
+  /// Error message (if in error state).
   final String? errorMessage;
+
+  /// Conflict details (if in conflict state).
   final SyncConflictInfo? conflictInfo;
 
+  /// Whether the user is fully authenticated.
   bool get isAuthenticated => authState == AuthState.authenticated;
+
+  /// Whether a sync operation is in progress.
   bool get isSyncing => syncState == SyncState.syncing;
+
+  /// Whether there is a sync conflict requiring resolution.
   bool get hasConflict => syncState == SyncState.conflict;
+
+  /// Whether there is an auth or sync error.
   bool get hasError =>
       authState == AuthState.error || syncState == SyncState.error;
 
+  /// Initial disconnected status.
   static const disconnected = CombinedSyncStatus(
     authState: AuthState.unauthenticated,
     syncState: SyncState.disconnected,
