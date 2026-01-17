@@ -6,6 +6,35 @@
 
 A modern, Flutter-based SSH terminal client for Windows, Linux, and Android. Features an encrypted vault for secure credential storage, multi-tab terminal sessions, tmux integration, and customizable themes.
 
+## Zero-Knowledge Architecture
+
+VibedTerm is designed with a **zero-knowledge security model**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      YOUR DEVICE                             │
+│                                                              │
+│   Password ──▶ Argon2id KDF ──▶ Encryption Key              │
+│                     │                                        │
+│   Plaintext ◀─────▶ XChaCha20-Poly1305 ◀─────▶ Vault File   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+              Cloud Storage (only encrypted blobs)
+              Provider CANNOT read your data
+```
+
+**Key principles:**
+
+- **No server required** - VibedTerm has no backend; your data never leaves your device unencrypted
+- **Password never transmitted** - Used only locally to derive the encryption key via Argon2id
+- **End-to-end encryption** - All vault data encrypted with XChaCha20-Poly1305 before any sync
+- **Zero trust in cloud providers** - OneDrive/Google Drive only see encrypted blobs
+- **Open source** - Verify the security model yourself
+
+See [Security Architecture](docs/security_architecture.md) for detailed cryptographic design.
+
 ## Features
 
 ### Security
@@ -139,9 +168,10 @@ flutter build apk
 
 ## Documentation
 
+- [Security Architecture](docs/security_architecture.md) - Zero-knowledge design and cryptography
+- [Vault Specification](docs/vault_spec_v1.md) - Encrypted vault file format
 - [Changelog](CHANGELOG.md) - Version history and release notes
 - [Todo & Roadmap](TODO.md) - Planned features and known issues
-- [Vault Specification](docs/vault_spec_v1.md) - Encrypted vault format details
 - [Claude.md](CLAUDE.md) - AI assistant development guidance
 
 ## Known Issues
