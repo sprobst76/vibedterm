@@ -16,6 +16,7 @@
 - [x] Auto-reconnect with exponential backoff
 - [x] Import SSH keys from ~/.ssh
 - [x] Key fingerprint display for identities
+- [x] Reconnect button for disconnected tabs
 - [x] Multi-tab terminal with independent connections
 - [x] Password and key authentication
 - [x] Encrypted vault with auto-unlock
@@ -25,7 +26,6 @@
 
 ### High Priority
 
-- [ ] **Reconnect button**: Quick reconnect for disconnected tabs
 - [ ] **tmux session list auto-refresh**: Parse terminal output for session list
 - [ ] **Keyboard shortcuts**: Ctrl+Tab for tab switching, Ctrl+1-9 for direct access
 

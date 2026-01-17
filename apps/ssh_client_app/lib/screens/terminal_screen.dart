@@ -389,6 +389,44 @@ class TerminalPanelState extends State<TerminalPanel>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (tab.canReconnect)
+              TextButton.icon(
+                onPressed: () async {
+                  await tab.reconnect();
+                  if (mounted) setState(() {});
+                },
+                icon: Icon(Icons.refresh, size: 16, color: iconColor),
+                label: Text(
+                  'Reconnect',
+                  style: TextStyle(fontSize: 12, color: textColor),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                ),
+              ),
+            if (tab.isReconnecting)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: iconColor,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Reconnecting...',
+                      style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.8)),
+                    ),
+                  ],
+                ),
+              ),
           ] else ...[
             const Expanded(child: SizedBox.shrink()),
           ],
@@ -1413,6 +1451,66 @@ class _ConnectionTab {
     _isReconnecting = false;
     bridge.write('[Auto-reconnect] Cancelled by user.\r\n');
     _addLog('Auto-reconnect: cancelled');
+  }
+
+  /// Whether the tab can be manually reconnected.
+  bool get canReconnect =>
+      !_isReconnecting &&
+      (status == TabConnectionStatus.disconnected ||
+          status == TabConnectionStatus.error) &&
+      _trustedKeys != null &&
+      _onHostKeyPrompt != null;
+
+  /// Manually reconnect the tab.
+  Future<void> reconnect() async {
+    if (!canReconnect) return;
+
+    _userDisconnected = false;
+    _reconnectAttempts = 0;
+    bridge.write('\r\n[Reconnect] Connecting...\r\n');
+    _addLog('Manual reconnect initiated');
+
+    status = TabConnectionStatus.connecting;
+    _onStatusChange?.call();
+
+    try {
+      await manager.connect(
+        SshTarget(
+          host: host.hostname,
+          port: host.port,
+          username: host.username,
+          password: password?.isNotEmpty == true ? password : null,
+          privateKey: identity?.privateKey,
+          passphrase: identity?.passphrase,
+          keepAliveInterval: _keepAliveInterval,
+          onHostKeyVerify: (type, fp) => _handleHostKey(
+            type,
+            fp,
+            _trustedKeys!,
+            _onHostKeyPrompt!,
+          ),
+        ),
+      );
+
+      status = TabConnectionStatus.connected;
+      _onStatusChange?.call();
+
+      bridge.write('[Reconnect] Connected! Opening shell...\r\n');
+      _addLog('Reconnect: success');
+
+      await _startShell();
+
+      // Re-attach tmux if was attached before
+      if (attachedTmuxSession != null && host.tmuxEnabled) {
+        await attachTmuxSession(attachedTmuxSession);
+      }
+    } catch (e) {
+      status = TabConnectionStatus.error;
+      _onStatusChange?.call();
+      final msg = e is SshException ? e.message : e.toString();
+      bridge.write('[Reconnect] Failed: $msg\r\n');
+      _addLog('Reconnect failed: $msg');
+    }
   }
 
   /// Lists tmux sessions on the remote host.
