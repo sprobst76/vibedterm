@@ -8,9 +8,6 @@
 .vscode/
 build/
 apps/ssh_client_app/build/
-apps/ssh_client_app/android/
-apps/ssh_client_app/linux/
-apps/ssh_client_app/windows/
 apps/ssh_client_app/.metadata
 coverage/
 pubspec.lock

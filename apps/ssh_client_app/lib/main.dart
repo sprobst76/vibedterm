@@ -204,25 +204,8 @@ class _HomeShellState extends State<HomeShell> {
       ),
       child: Column(
         children: [
-          // Rotated VibedTerm branding
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 100,
-            child: RotatedBox(
-              quarterTurns: 3,
-              child: Text(
-                'VibedTerm',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
-                  color: colorScheme.primary,
-                ),
-              ),
-            ),
-          ),
-          const Spacer(),
-          // Navigation icons
+          const SizedBox(height: 8),
+          // Navigation icons at top
           ..._pages.asMap().entries.map((entry) {
             final idx = entry.key;
             final page = entry.value;
@@ -261,6 +244,23 @@ class _HomeShellState extends State<HomeShell> {
             );
           }),
           const Spacer(),
+          // Rotated VibedTerm branding above settings
+          SizedBox(
+            height: 120,
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: Text(
+                'VibedTerm',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 3,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           // Settings icon at bottom
           Tooltip(
             message: 'Settings',
@@ -281,7 +281,7 @@ class _HomeShellState extends State<HomeShell> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
         ],
       ),
     );
