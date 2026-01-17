@@ -1,4 +1,4 @@
-package com.example.ssh_client_app
+package com.vibedterm.app
 
 import io.flutter.embedding.android.FlutterActivity
 
