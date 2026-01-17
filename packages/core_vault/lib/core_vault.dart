@@ -257,6 +257,11 @@ class VaultSettings {
     this.terminalFontFamily = 'monospace',
     this.terminalOpacity = 1.0,
     this.terminalCursorStyle = 'block',
+    // SSH settings
+    this.sshKeepaliveInterval = 30,
+    this.sshConnectionTimeout = 30,
+    this.sshDefaultPort = 22,
+    this.sshAutoReconnect = false,
   });
 
   final String theme; // e.g., system/light/dark (app theme)
@@ -270,6 +275,12 @@ class VaultSettings {
   final double terminalOpacity; // 0.0 - 1.0
   final String terminalCursorStyle; // block, underline, bar
 
+  // SSH settings
+  final int sshKeepaliveInterval; // seconds, 0 = disabled
+  final int sshConnectionTimeout; // seconds
+  final int sshDefaultPort;
+  final bool sshAutoReconnect;
+
   Map<String, dynamic> toJson() => {
         'theme': theme,
         'fontSize': fontSize,
@@ -279,6 +290,10 @@ class VaultSettings {
         'terminalFontFamily': terminalFontFamily,
         'terminalOpacity': terminalOpacity,
         'terminalCursorStyle': terminalCursorStyle,
+        'sshKeepaliveInterval': sshKeepaliveInterval,
+        'sshConnectionTimeout': sshConnectionTimeout,
+        'sshDefaultPort': sshDefaultPort,
+        'sshAutoReconnect': sshAutoReconnect,
       };
 
   factory VaultSettings.fromJson(Map<String, dynamic> json) {
@@ -291,6 +306,10 @@ class VaultSettings {
       terminalFontFamily: json['terminalFontFamily'] as String? ?? 'monospace',
       terminalOpacity: (json['terminalOpacity'] as num?)?.toDouble() ?? 1.0,
       terminalCursorStyle: json['terminalCursorStyle'] as String? ?? 'block',
+      sshKeepaliveInterval: (json['sshKeepaliveInterval'] as int?) ?? 30,
+      sshConnectionTimeout: (json['sshConnectionTimeout'] as int?) ?? 30,
+      sshDefaultPort: (json['sshDefaultPort'] as int?) ?? 22,
+      sshAutoReconnect: (json['sshAutoReconnect'] as bool?) ?? false,
     );
   }
 
@@ -305,6 +324,10 @@ class VaultSettings {
     String? terminalFontFamily,
     double? terminalOpacity,
     String? terminalCursorStyle,
+    int? sshKeepaliveInterval,
+    int? sshConnectionTimeout,
+    int? sshDefaultPort,
+    bool? sshAutoReconnect,
   }) {
     return VaultSettings(
       theme: theme ?? this.theme,
@@ -315,6 +338,10 @@ class VaultSettings {
       terminalFontFamily: terminalFontFamily ?? this.terminalFontFamily,
       terminalOpacity: terminalOpacity ?? this.terminalOpacity,
       terminalCursorStyle: terminalCursorStyle ?? this.terminalCursorStyle,
+      sshKeepaliveInterval: sshKeepaliveInterval ?? this.sshKeepaliveInterval,
+      sshConnectionTimeout: sshConnectionTimeout ?? this.sshConnectionTimeout,
+      sshDefaultPort: sshDefaultPort ?? this.sshDefaultPort,
+      sshAutoReconnect: sshAutoReconnect ?? this.sshAutoReconnect,
     );
   }
 
@@ -328,7 +355,11 @@ class VaultSettings {
         terminalFontSize == other.terminalFontSize &&
         terminalFontFamily == other.terminalFontFamily &&
         terminalOpacity == other.terminalOpacity &&
-        terminalCursorStyle == other.terminalCursorStyle;
+        terminalCursorStyle == other.terminalCursorStyle &&
+        sshKeepaliveInterval == other.sshKeepaliveInterval &&
+        sshConnectionTimeout == other.sshConnectionTimeout &&
+        sshDefaultPort == other.sshDefaultPort &&
+        sshAutoReconnect == other.sshAutoReconnect;
   }
 
   @override
@@ -340,7 +371,11 @@ class VaultSettings {
       terminalFontSize.hashCode ^
       terminalFontFamily.hashCode ^
       terminalOpacity.hashCode ^
-      terminalCursorStyle.hashCode;
+      terminalCursorStyle.hashCode ^
+      sshKeepaliveInterval.hashCode ^
+      sshConnectionTimeout.hashCode ^
+      sshDefaultPort.hashCode ^
+      sshAutoReconnect.hashCode;
 }
 
 /// Handles version upgrades of vault payloads.

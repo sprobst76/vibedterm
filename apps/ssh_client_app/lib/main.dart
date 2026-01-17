@@ -266,10 +266,7 @@ class _HomeShellState extends State<HomeShell> {
             message: 'Settings',
             preferBelow: false,
             child: InkWell(
-              onTap: () {
-                // Open settings - switch to vault screen which has settings
-                _setIndex(0);
-              },
+              onTap: _showSettingsDialog,
               child: SizedBox(
                 width: 56,
                 height: 48,
@@ -291,6 +288,27 @@ class _HomeShellState extends State<HomeShell> {
     _vaultService.setPendingConnectHost(host, identity: identity);
     _setIndex(2);
   }
+
+  void _showSettingsDialog() {
+    final currentSettings = _vaultService.currentData?.settings;
+    if (currentSettings == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unlock a vault first to access settings')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => _SettingsDialog(
+        initialSettings: currentSettings,
+        onSave: (settings) async {
+          await _vaultService.updateSettings(settings);
+          if (mounted) setState(() {});
+        },
+      ),
+    );
+  }
 }
 
 class _PageConfig {
@@ -298,4 +316,297 @@ class _PageConfig {
 
   final String label;
   final IconData icon;
+}
+
+// -----------------------------------------------------------------------------
+// Settings Dialog
+// -----------------------------------------------------------------------------
+
+class _SettingsDialog extends StatefulWidget {
+  const _SettingsDialog({
+    required this.initialSettings,
+    required this.onSave,
+  });
+
+  final VaultSettings initialSettings;
+  final Future<void> Function(VaultSettings) onSave;
+
+  @override
+  State<_SettingsDialog> createState() => _SettingsDialogState();
+}
+
+class _SettingsDialogState extends State<_SettingsDialog>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  // Terminal settings
+  late String _terminalTheme;
+  late double _terminalFontSize;
+  late String? _terminalFontFamily;
+  late double _terminalOpacity;
+  late String _terminalCursorStyle;
+
+  // SSH settings
+  late int _sshKeepaliveInterval;
+  late int _sshConnectionTimeout;
+  late int _sshDefaultPort;
+  late bool _sshAutoReconnect;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+
+    final s = widget.initialSettings;
+    _terminalTheme = s.terminalTheme;
+    _terminalFontSize = s.terminalFontSize;
+    _terminalFontFamily =
+        s.terminalFontFamily == 'monospace' ? null : s.terminalFontFamily;
+    _terminalOpacity = s.terminalOpacity;
+    _terminalCursorStyle = s.terminalCursorStyle;
+
+    _sshKeepaliveInterval = s.sshKeepaliveInterval;
+    _sshConnectionTimeout = s.sshConnectionTimeout;
+    _sshDefaultPort = s.sshDefaultPort;
+    _sshAutoReconnect = s.sshAutoReconnect;
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Settings'),
+      contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
+      content: SizedBox(
+        width: 450,
+        height: 420,
+        child: Column(
+          children: [
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Appearance', icon: Icon(Icons.palette_outlined)),
+                Tab(text: 'SSH', icon: Icon(Icons.terminal)),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildAppearanceTab(),
+                  _buildSshTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saveSettings,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAppearanceTab() {
+    final themeNames = TerminalThemePresets.themeNames;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Theme selector
+          Text('Color Theme', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _terminalTheme,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            items: themeNames
+                .map((name) => DropdownMenuItem(
+                      value: name,
+                      child: Text(_formatThemeName(name)),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) setState(() => _terminalTheme = value);
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Font size slider
+          Text('Font Size: ${_terminalFontSize.toInt()}',
+              style: Theme.of(context).textTheme.titleSmall),
+          Slider(
+            value: _terminalFontSize,
+            min: 10,
+            max: 24,
+            divisions: 14,
+            label: '${_terminalFontSize.toInt()}',
+            onChanged: (value) => setState(() => _terminalFontSize = value),
+          ),
+          const SizedBox(height: 8),
+
+          // Font family
+          Text('Font Family', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          TextFormField(
+            initialValue: _terminalFontFamily ?? '',
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'monospace (default)',
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            onChanged: (value) {
+              _terminalFontFamily = value.isEmpty ? null : value;
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Opacity slider
+          Text('Background Opacity: ${(_terminalOpacity * 100).toInt()}%',
+              style: Theme.of(context).textTheme.titleSmall),
+          Slider(
+            value: _terminalOpacity,
+            min: 0.5,
+            max: 1.0,
+            divisions: 10,
+            label: '${(_terminalOpacity * 100).toInt()}%',
+            onChanged: (value) => setState(() => _terminalOpacity = value),
+          ),
+          const SizedBox(height: 8),
+
+          // Cursor style
+          Text('Cursor Style', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'block', label: Text('Block')),
+              ButtonSegment(value: 'underline', label: Text('Underline')),
+              ButtonSegment(value: 'bar', label: Text('Bar')),
+            ],
+            selected: {_terminalCursorStyle},
+            onSelectionChanged: (selection) {
+              setState(() => _terminalCursorStyle = selection.first);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSshTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Keepalive interval
+          Text('Keepalive Interval: ${_sshKeepaliveInterval}s',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 4),
+          Text(
+            'Send keepalive packets to prevent disconnection (0 = disabled)',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Slider(
+            value: _sshKeepaliveInterval.toDouble(),
+            min: 0,
+            max: 120,
+            divisions: 24,
+            label: '${_sshKeepaliveInterval}s',
+            onChanged: (value) =>
+                setState(() => _sshKeepaliveInterval = value.toInt()),
+          ),
+          const SizedBox(height: 16),
+
+          // Connection timeout
+          Text('Connection Timeout: ${_sshConnectionTimeout}s',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 4),
+          Text(
+            'Maximum time to wait for connection',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Slider(
+            value: _sshConnectionTimeout.toDouble(),
+            min: 5,
+            max: 120,
+            divisions: 23,
+            label: '${_sshConnectionTimeout}s',
+            onChanged: (value) =>
+                setState(() => _sshConnectionTimeout = value.toInt()),
+          ),
+          const SizedBox(height: 16),
+
+          // Default port
+          Text('Default Port', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          TextFormField(
+            initialValue: _sshDefaultPort.toString(),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (value) {
+              final port = int.tryParse(value);
+              if (port != null && port > 0 && port <= 65535) {
+                _sshDefaultPort = port;
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Auto-reconnect
+          SwitchListTile(
+            title: const Text('Auto-reconnect'),
+            subtitle: const Text('Automatically reconnect on connection loss'),
+            value: _sshAutoReconnect,
+            contentPadding: EdgeInsets.zero,
+            onChanged: (value) => setState(() => _sshAutoReconnect = value),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatThemeName(String name) {
+    return name
+        .split('-')
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
+  }
+
+  Future<void> _saveSettings() async {
+    final newSettings = widget.initialSettings.copyWith(
+      terminalTheme: _terminalTheme,
+      terminalFontSize: _terminalFontSize,
+      terminalFontFamily: _terminalFontFamily ?? 'monospace',
+      terminalOpacity: _terminalOpacity,
+      terminalCursorStyle: _terminalCursorStyle,
+      sshKeepaliveInterval: _sshKeepaliveInterval,
+      sshConnectionTimeout: _sshConnectionTimeout,
+      sshDefaultPort: _sshDefaultPort,
+      sshAutoReconnect: _sshAutoReconnect,
+    );
+    await widget.onSave(newSettings);
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
 }
