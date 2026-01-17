@@ -3,6 +3,30 @@ import 'package:flutter/foundation.dart';
 
 enum VaultStatus { locked, unlocked, error }
 
+/// Status of cloud sync.
+enum CloudSyncStatus {
+  /// Sync not configured
+  disabled,
+
+  /// Not logged in
+  unauthenticated,
+
+  /// Logged in, ready to sync
+  idle,
+
+  /// Currently syncing
+  syncing,
+
+  /// Sync completed
+  synced,
+
+  /// Conflict detected
+  conflict,
+
+  /// Error occurred
+  error,
+}
+
 @immutable
 class VaultState {
   const VaultState({
@@ -10,24 +34,36 @@ class VaultState {
     this.message = '',
     this.filePath,
     this.isBusy = false,
+    this.syncStatus = CloudSyncStatus.disabled,
+    this.syncMessage,
+    this.lastSyncAt,
   });
 
   final VaultStatus status;
   final String message;
   final String? filePath;
   final bool isBusy;
+  final CloudSyncStatus syncStatus;
+  final String? syncMessage;
+  final DateTime? lastSyncAt;
 
   VaultState copyWith({
     VaultStatus? status,
     String? message,
     String? filePath,
     bool? isBusy,
+    CloudSyncStatus? syncStatus,
+    String? syncMessage,
+    DateTime? lastSyncAt,
   }) {
     return VaultState(
       status: status ?? this.status,
       message: message ?? this.message,
       filePath: filePath ?? this.filePath,
       isBusy: isBusy ?? this.isBusy,
+      syncStatus: syncStatus ?? this.syncStatus,
+      syncMessage: syncMessage ?? this.syncMessage,
+      lastSyncAt: lastSyncAt ?? this.lastSyncAt,
     );
   }
 }

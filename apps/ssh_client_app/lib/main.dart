@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:core_sync/core_sync.dart';
 import 'package:core_vault/core_vault.dart';
 import 'package:flutter/material.dart';
 import 'package:ui_terminal/ui_terminal.dart';
 
 import 'screens/screens.dart';
+import 'services/sync_manager.dart';
 import 'services/vault_service.dart';
 
 void main() {
@@ -20,11 +22,19 @@ class VibedTermApp extends StatefulWidget {
 
 class _VibedTermAppState extends State<VibedTermApp> {
   final _vaultService = VaultService();
+  final _syncManager = SyncManager();
 
   @override
   void initState() {
     super.initState();
     _vaultService.init();
+    _syncManager.init();
+  }
+
+  @override
+  void dispose() {
+    _syncManager.dispose();
+    super.dispose();
   }
 
   @override
@@ -42,7 +52,7 @@ class _VibedTermAppState extends State<VibedTermApp> {
           theme: appTheme,
           darkTheme: appTheme,
           themeMode: ThemeMode.light, // Always use our custom theme
-          home: HomeShell(service: _vaultService),
+          home: HomeShell(service: _vaultService, syncManager: _syncManager),
         );
       },
     );
@@ -50,9 +60,10 @@ class _VibedTermAppState extends State<VibedTermApp> {
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.service});
+  const HomeShell({super.key, required this.service, required this.syncManager});
 
   final VaultService service;
+  final SyncManager syncManager;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -261,6 +272,9 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
           const SizedBox(height: 8),
+          // Sync status indicator
+          _buildSyncIndicator(colorScheme),
+          const SizedBox(height: 4),
           // Settings icon at bottom
           Tooltip(
             message: 'Settings',
@@ -284,6 +298,109 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
+  Widget _buildSyncIndicator(ColorScheme colorScheme) {
+    return StreamBuilder<CombinedSyncStatus>(
+      stream: widget.syncManager.statusStream,
+      initialData: widget.syncManager.status,
+      builder: (context, snapshot) {
+        final status = snapshot.data ?? CombinedSyncStatus.disconnected;
+        final syncState = status.syncState;
+        final isConfigured = widget.syncManager.isConfigured;
+
+        // Determine icon and color based on state
+        IconData icon;
+        Color color;
+        String tooltip;
+
+        if (!isConfigured) {
+          icon = Icons.cloud_off_outlined;
+          color = colorScheme.onSurface.withOpacity(0.3);
+          tooltip = 'Sync not configured';
+        } else if (!status.isAuthenticated) {
+          icon = Icons.cloud_off_outlined;
+          color = colorScheme.onSurface.withOpacity(0.5);
+          tooltip = 'Not logged in';
+        } else {
+          switch (syncState) {
+            case SyncState.disconnected:
+              icon = Icons.cloud_off_outlined;
+              color = colorScheme.onSurface.withOpacity(0.5);
+              tooltip = 'Disconnected';
+            case SyncState.idle:
+              icon = Icons.cloud_outlined;
+              color = colorScheme.primary;
+              tooltip = 'Ready to sync';
+            case SyncState.syncing:
+              icon = Icons.cloud_sync_outlined;
+              color = colorScheme.primary;
+              tooltip = 'Syncing...';
+            case SyncState.synced:
+              icon = Icons.cloud_done_outlined;
+              color = Colors.green;
+              tooltip = 'Synced';
+            case SyncState.conflict:
+              icon = Icons.cloud_outlined;
+              color = Colors.orange;
+              tooltip = 'Conflict - tap to resolve';
+            case SyncState.error:
+              icon = Icons.cloud_off_outlined;
+              color = colorScheme.error;
+              tooltip = status.errorMessage ?? 'Sync error';
+          }
+        }
+
+        return Tooltip(
+          message: tooltip,
+          preferBelow: false,
+          child: InkWell(
+            onTap: _showSettingsDialog,
+            child: SizedBox(
+              width: 56,
+              height: 40,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(icon, color: color, size: 20),
+                  // Show spinning indicator when syncing
+                  if (syncState == SyncState.syncing)
+                    Positioned(
+                      right: 14,
+                      top: 8,
+                      child: SizedBox(
+                        width: 8,
+                        height: 8,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  // Show badge for conflict or error
+                  if (syncState == SyncState.conflict ||
+                      syncState == SyncState.error)
+                    Positioned(
+                      right: 14,
+                      top: 8,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: syncState == SyncState.conflict
+                              ? Colors.orange
+                              : colorScheme.error,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _handleConnectHost(VaultHost host, VaultIdentity? identity) {
     _vaultService.setPendingConnectHost(host, identity: identity);
     _setIndex(2);
@@ -302,6 +419,8 @@ class _HomeShellState extends State<HomeShell> {
       context: context,
       builder: (context) => _SettingsDialog(
         initialSettings: currentSettings,
+        syncManager: widget.syncManager,
+        vaultPath: _vaultService.currentPath,
         onSave: (settings) async {
           await _vaultService.updateSettings(settings);
           if (mounted) setState(() {});
@@ -325,10 +444,14 @@ class _PageConfig {
 class _SettingsDialog extends StatefulWidget {
   const _SettingsDialog({
     required this.initialSettings,
+    required this.syncManager,
+    required this.vaultPath,
     required this.onSave,
   });
 
   final VaultSettings initialSettings;
+  final SyncManager syncManager;
+  final String? vaultPath;
   final Future<void> Function(VaultSettings) onSave;
 
   @override
@@ -352,10 +475,20 @@ class _SettingsDialogState extends State<_SettingsDialog>
   late int _sshDefaultPort;
   late bool _sshAutoReconnect;
 
+  // Sync settings
+  final _serverUrlController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _totpController = TextEditingController();
+  bool _isRegistering = false;
+  bool _isSyncBusy = false;
+  String? _syncError;
+  CombinedSyncStatus? _syncStatus;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
 
     final s = widget.initialSettings;
     _terminalTheme = s.terminalTheme;
@@ -369,11 +502,24 @@ class _SettingsDialogState extends State<_SettingsDialog>
     _sshConnectionTimeout = s.sshConnectionTimeout;
     _sshDefaultPort = s.sshDefaultPort;
     _sshAutoReconnect = s.sshAutoReconnect;
+
+    // Sync settings
+    _serverUrlController.text = widget.syncManager.serverUrl;
+    _syncStatus = widget.syncManager.status;
+    widget.syncManager.statusStream.listen((status) {
+      if (mounted) {
+        setState(() => _syncStatus = status);
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _serverUrlController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _totpController.dispose();
     super.dispose();
   }
 
@@ -384,7 +530,7 @@ class _SettingsDialogState extends State<_SettingsDialog>
       contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
       content: SizedBox(
         width: 450,
-        height: 420,
+        height: 480,
         child: Column(
           children: [
             TabBar(
@@ -392,6 +538,7 @@ class _SettingsDialogState extends State<_SettingsDialog>
               tabs: const [
                 Tab(text: 'Appearance', icon: Icon(Icons.palette_outlined)),
                 Tab(text: 'SSH', icon: Icon(Icons.terminal)),
+                Tab(text: 'Sync', icon: Icon(Icons.cloud_outlined)),
               ],
             ),
             Expanded(
@@ -400,6 +547,7 @@ class _SettingsDialogState extends State<_SettingsDialog>
                 children: [
                   _buildAppearanceTab(),
                   _buildSshTab(),
+                  _buildSyncTab(),
                 ],
               ),
             ),
@@ -583,6 +731,670 @@ class _SettingsDialogState extends State<_SettingsDialog>
         ],
       ),
     );
+  }
+
+  Widget _buildSyncTab() {
+    final status = _syncStatus;
+    final isConfigured = widget.syncManager.isConfigured;
+    final isAuthenticated = status?.isAuthenticated ?? false;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Server URL
+          Text('Sync Server', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _serverUrlController,
+                  enabled: !isAuthenticated,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'https://sync.example.com',
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!isAuthenticated)
+                FilledButton.tonal(
+                  onPressed: _isSyncBusy ? null : _configureServer,
+                  child: const Text('Connect'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Show error if any
+          if (_syncError != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline,
+                      color: Theme.of(context).colorScheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _syncError!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => setState(() => _syncError = null),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Show different UI based on auth state
+          if (!isConfigured)
+            _buildNotConfiguredView()
+          else if (status?.authState == AuthState.totpRequired)
+            _buildTotpView()
+          else if (status?.authState == AuthState.pendingApproval)
+            _buildPendingApprovalView()
+          else if (isAuthenticated)
+            _buildAuthenticatedView(status!)
+          else
+            _buildLoginView(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotConfiguredView() {
+    return Center(
+      child: Column(
+        children: [
+          const SizedBox(height: 32),
+          Icon(Icons.cloud_off,
+              size: 64, color: Theme.of(context).colorScheme.outline),
+          const SizedBox(height: 16),
+          Text(
+            'Cloud sync not configured',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Enter a sync server URL above to enable vault synchronization',
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Toggle between login and register
+        Row(
+          children: [
+            ChoiceChip(
+              label: const Text('Login'),
+              selected: !_isRegistering,
+              onSelected: (selected) {
+                if (selected) setState(() => _isRegistering = false);
+              },
+            ),
+            const SizedBox(width: 8),
+            ChoiceChip(
+              label: const Text('Register'),
+              selected: _isRegistering,
+              onSelected: (selected) {
+                if (selected) setState(() => _isRegistering = true);
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Email field
+        Text('Email', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _emailController,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'you@example.com',
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          keyboardType: TextInputType.emailAddress,
+          autofocus: true,
+        ),
+        const SizedBox(height: 12),
+
+        // Password field
+        Text('Password', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _passwordController,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          obscureText: true,
+          onFieldSubmitted: (_) => _isRegistering ? _register() : _login(),
+        ),
+        const SizedBox(height: 16),
+
+        // Login/Register button
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _isSyncBusy
+                ? null
+                : (_isRegistering ? _register : _login),
+            child: _isSyncBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(_isRegistering ? 'Register' : 'Login'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTotpView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.security, size: 48),
+        const SizedBox(height: 16),
+        Text(
+          'Two-Factor Authentication',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Enter the 6-digit code from your authenticator app',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 16),
+
+        TextFormField(
+          controller: _totpController,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: '000000',
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          autofocus: true,
+          onFieldSubmitted: (_) => _verifyTotp(),
+        ),
+        const SizedBox(height: 16),
+
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton(
+                onPressed: _isSyncBusy ? null : _verifyTotp,
+                child: _isSyncBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Verify'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () async {
+                await widget.syncManager.disconnect();
+                setState(() {});
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPendingApprovalView() {
+    return Center(
+      child: Column(
+        children: [
+          const SizedBox(height: 32),
+          Icon(Icons.hourglass_empty,
+              size: 64, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 16),
+          Text(
+            'Account Pending Approval',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your account is waiting for administrator approval.\nYou will be able to login once approved.',
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          TextButton(
+            onPressed: () async {
+              await widget.syncManager.disconnect();
+              setState(() {});
+            },
+            child: const Text('Use Different Account'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAuthenticatedView(CombinedSyncStatus status) {
+    final lastSync = status.lastSyncAt;
+    final syncStateText = _getSyncStateText(status.syncState);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // User info
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            child: Icon(Icons.person,
+                color: Theme.of(context).colorScheme.onPrimaryContainer),
+          ),
+          title: Text(status.user?.email ?? 'Logged in'),
+          subtitle: Text(syncStateText),
+          trailing: IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: _isSyncBusy ? null : _logout,
+          ),
+        ),
+        const Divider(),
+        const SizedBox(height: 8),
+
+        // Sync status
+        Row(
+          children: [
+            Icon(
+              _getSyncStateIcon(status.syncState),
+              size: 20,
+              color: _getSyncStateColor(status.syncState),
+            ),
+            const SizedBox(width: 8),
+            Text(syncStateText),
+            const Spacer(),
+            if (lastSync != null)
+              Text(
+                'Last sync: ${_formatTime(lastSync)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Sync button
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _isSyncBusy ? null : _syncNow,
+            icon: _isSyncBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            label: Text(_isSyncBusy ? 'Syncing...' : 'Sync Now'),
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Conflict resolution (if in conflict state)
+        if (status.hasConflict) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.tertiaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.warning,
+                        color:
+                            Theme.of(context).colorScheme.onTertiaryContainer),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Sync Conflict',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color:
+                            Theme.of(context).colorScheme.onTertiaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your local vault and the server have conflicting changes.',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onTertiaryContainer),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _isSyncBusy ? null : _forceUpload,
+                        child: const Text('Keep Local'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _isSyncBusy ? null : _forceDownload,
+                        child: const Text('Use Server'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _getSyncStateText(SyncState state) {
+    switch (state) {
+      case SyncState.disconnected:
+        return 'Disconnected';
+      case SyncState.idle:
+        return 'Ready to sync';
+      case SyncState.syncing:
+        return 'Syncing...';
+      case SyncState.synced:
+        return 'Synced';
+      case SyncState.conflict:
+        return 'Conflict detected';
+      case SyncState.error:
+        return 'Sync error';
+    }
+  }
+
+  IconData _getSyncStateIcon(SyncState state) {
+    switch (state) {
+      case SyncState.disconnected:
+        return Icons.cloud_off;
+      case SyncState.idle:
+        return Icons.cloud_queue;
+      case SyncState.syncing:
+        return Icons.sync;
+      case SyncState.synced:
+        return Icons.cloud_done;
+      case SyncState.conflict:
+        return Icons.warning;
+      case SyncState.error:
+        return Icons.error;
+    }
+  }
+
+  Color _getSyncStateColor(SyncState state) {
+    final colorScheme = Theme.of(context).colorScheme;
+    switch (state) {
+      case SyncState.disconnected:
+        return colorScheme.outline;
+      case SyncState.idle:
+        return colorScheme.primary;
+      case SyncState.syncing:
+        return colorScheme.primary;
+      case SyncState.synced:
+        return Colors.green;
+      case SyncState.conflict:
+        return colorScheme.tertiary;
+      case SyncState.error:
+        return colorScheme.error;
+    }
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  Future<void> _configureServer() async {
+    final url = _serverUrlController.text.trim();
+    if (url.isEmpty) {
+      setState(() => _syncError = 'Please enter a server URL');
+      return;
+    }
+
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.configure(url);
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Failed to connect: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _syncError = 'Please enter email and password');
+      return;
+    }
+
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.login(
+        email: email,
+        password: password,
+        deviceName: _getDeviceName(),
+        deviceType: _getDeviceType(),
+      );
+      _emailController.clear();
+      _passwordController.clear();
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Login failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  Future<void> _register() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _syncError = 'Please enter email and password');
+      return;
+    }
+
+    if (password.length < 8) {
+      setState(() => _syncError = 'Password must be at least 8 characters');
+      return;
+    }
+
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.register(email: email, password: password);
+      _emailController.clear();
+      _passwordController.clear();
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Registration failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  Future<void> _verifyTotp() async {
+    final code = _totpController.text.trim();
+    if (code.length != 6) {
+      setState(() => _syncError = 'Please enter a 6-digit code');
+      return;
+    }
+
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.verifyTOTP(code);
+      _totpController.clear();
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Verification failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.logout();
+    } catch (e) {
+      setState(() => _syncError = 'Logout failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  Future<void> _syncNow() async {
+    if (widget.vaultPath == null) {
+      setState(() => _syncError = 'No vault path available');
+      return;
+    }
+
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      final result =
+          await widget.syncManager.syncVault(vaultFilePath: widget.vaultPath!);
+      if (!result.isSuccess && result.reason != null) {
+        setState(() => _syncError = result.reason);
+      }
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Sync failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  Future<void> _forceUpload() async {
+    if (widget.vaultPath == null) return;
+
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.forceUpload(vaultFilePath: widget.vaultPath!);
+      widget.syncManager.clearConflict();
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Upload failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  Future<void> _forceDownload() async {
+    if (widget.vaultPath == null) return;
+
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.forceDownload(vaultFilePath: widget.vaultPath!);
+      widget.syncManager.clearConflict();
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Download failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
+  }
+
+  String _getDeviceName() {
+    try {
+      return Platform.localHostname;
+    } catch (_) {
+      return 'VibedTerm Device';
+    }
+  }
+
+  String _getDeviceType() {
+    if (Platform.isWindows) return 'windows';
+    if (Platform.isLinux) return 'linux';
+    if (Platform.isAndroid) return 'android';
+    if (Platform.isMacOS) return 'macos';
+    if (Platform.isIOS) return 'ios';
+    return 'unknown';
   }
 
   String _formatThemeName(String name) {

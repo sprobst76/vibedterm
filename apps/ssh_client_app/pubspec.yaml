@@ -17,6 +17,8 @@ dependencies:
     path: ../../packages/core_ssh
   ui_terminal:
     path: ../../packages/ui_terminal
+  core_sync:
+    path: ../../packages/core_sync
   uuid: ^4.5.1
   file_picker: ^8.1.2
   shared_preferences: ^2.3.2
