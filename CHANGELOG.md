@@ -1,60 +1,99 @@
 # Changelog
 
-## Unreleased
+All notable changes to VibedTerm will be documented in this file.
 
-### Terminal UX Overhaul (Terminus-like)
+## [0.2.0] - 2026-01-17
 
-- **Multi-connection tabs**: Each tab now owns its own `SshConnectionManager` - connect to multiple different hosts simultaneously with independent connections.
-- **Simplified UI**: Removed connection card, command card, and advanced form. Terminal view now takes center stage.
-- **Tab bar with status indicators**: Colored dots show connection state (green=connected, amber=connecting, red=error, grey=disconnected).
-- **Quick-connect flow**: [+] button opens BottomSheet host picker; empty state shows ActionChip shortcuts for fast connection.
-- **Collapsible logs drawer**: Per-tab logs accessible via status bar toggle or menu.
-- **Close confirmation**: Dialog prompts before closing tabs with active connections.
-- **Trusted keys dialog**: Host key management moved to menu dialog.
+### Added
 
-### SSH Authentication Improvements
+#### tmux Integration
+- **Auto-attach**: Automatically attach to or create tmux sessions on SSH connect
+- **Session picker dialog**: Choose from existing sessions when multiple are available
+- **Session manager UI**: Create, attach, detach, and kill tmux sessions via grid icon in status bar
+- **Tab labels**: Display attached tmux session name in tab header (e.g., "myserver [dev]")
+- **Per-host configuration**: Enable tmux auto-attach and set session name per host
 
-- **Password authentication**: Always prompt for password before connecting; leave empty to use key-only auth.
-- **Auth method logging**: Debug output shows available auth methods (`key=true/false, password=true/false`).
-- **Key parsing error handling**: If private key parsing fails, continues with password auth as fallback.
-- **Better error messages**: Logs show number of keys loaded and parsing errors.
+#### Terminal Theming
+- **12 color themes**: Default, Solarized Dark/Light, Monokai, Dracula, Nord, Gruvbox Dark/Light, One Dark/Light, GitHub Light, Tomorrow Light
+- **App-wide theming**: Terminal theme colors apply to entire application UI
+- **Theme converter**: `TerminalThemeConverter` generates Flutter `ThemeData` from terminal themes
 
-### Vault Auto-Unlock
+#### Settings Dialog
+- **Appearance tab**: Color theme, font size, font family, background opacity, cursor style
+- **SSH tab**: Keepalive interval, connection timeout, default port, auto-reconnect toggle
+- **Accessible via sidebar**: Click gear icon to open settings
 
-- **Auto-unlock on startup**: If vault password was saved securely ("Remember securely"), vault unlocks automatically on app start.
-- **Last vault persistence**: Remembers last opened vault path across sessions.
+#### UI Redesign
+- **Vertical sidebar**: Compact 56px sidebar with navigation icons at top
+- **Rotated branding**: "VibedTerm" text displayed vertically above settings icon
+- **No top AppBar**: More screen space for terminal content
+- **Custom app icon**: Terminal-style icon with cyan prompt on dark background
 
-### UX Improvements
+#### SSH Settings Model
+- `sshKeepaliveInterval`: Seconds between keepalive packets (0 = disabled)
+- `sshConnectionTimeout`: Connection timeout in seconds
+- `sshDefaultPort`: Default SSH port for new hosts
+- `sshAutoReconnect`: Auto-reconnect on connection loss (UI only, implementation planned)
 
-- **Enter key confirms dialogs**: Password dialogs (vault and SSH) can be confirmed with Enter key.
-- **Autofocus on password fields**: Password input fields receive focus automatically.
+### Changed
+- Moved from horizontal AppBar to vertical sidebar navigation
+- Settings now accessible from dedicated settings icon instead of Vault screen
+- Platform directories (android, windows, linux) now tracked in git
 
-### Windows Platform Fixes
+### Fixed
+- Window title now shows "VibedTerm" on all platforms
+- App icon properly displayed on Windows and Android
 
-- **Fixed xterm focus errors**: Disabled autofocus on `VibedTerminalView` to prevent Windows `PlatformException: view ID is null`.
-- **Delayed focus request**: Added 100ms delay before requesting terminal focus after tab creation.
-- **Fixed controller disposal errors**: Removed premature `TextEditingController.dispose()` calls that caused "used after disposed" errors during dialog animations.
-- **Fixed FocusNode disposal errors**: Removed manual FocusNode management in favor of Flutter's built-in autofocus.
+---
+
+## [0.1.0] - 2024-12
+
+### Added
+
+#### Terminal UX (Terminus-like)
+- **Multi-connection tabs**: Each tab owns its own `SshConnectionManager` - connect to multiple hosts simultaneously
+- **Tab bar with status indicators**: Colored dots show connection state (green=connected, amber=connecting, red=error, grey=disconnected)
+- **Quick-connect flow**: [+] button opens BottomSheet host picker; empty state shows ActionChip shortcuts
+- **Collapsible logs drawer**: Per-tab logs accessible via status bar toggle
+- **Close confirmation**: Dialog prompts before closing tabs with active connections
+- **Trusted keys dialog**: Host key management via menu
+
+#### SSH Authentication
+- **Password authentication**: Dialog prompt for password before connecting
+- **Key authentication**: Link identities (private keys) to hosts
+- **Auth method logging**: Debug output shows available auth methods
+- **Key parsing error handling**: Falls back to password auth if key parsing fails
+
+#### Vault System
+- **Encrypted vault**: Argon2id KDF with XChaCha20-Poly1305 or AES-256-GCM encryption
+- **Auto-unlock**: Remember vault password securely for auto-unlock on startup
+- **Host key persistence**: Trusted SSH host keys stored in vault metadata
+
+#### UX Improvements
+- **Enter key confirms dialogs**: Password dialogs can be confirmed with Enter
+- **Autofocus on password fields**: Automatic focus for faster input
+
+### Fixed
+
+#### Windows Platform
+- Disabled autofocus on `VibedTerminalView` to prevent `PlatformException`
+- Added delay before requesting terminal focus after tab creation
+- Fixed `TextEditingController` disposal errors during dialog animations
+- Fixed `FocusNode` disposal errors
 
 ### Code Structure
+- Extracted screens into `lib/screens/` directory
+- Clean callback patterns replacing `findAncestorStateOfType` hacks
+- Monorepo structure with Melos orchestration
 
-- Extracted screens from monolithic `main.dart` into `lib/screens/` directory:
-  - `vault_screen.dart` - Vault creation/unlock UI
-  - `hosts_screen.dart` - Host and identity management
-  - `terminal_screen.dart` - Terminus-like multi-tab terminal
-- Replaced `findAncestorStateOfType` hack with clean `onConnectHost` callback pattern.
-- Added `clearPendingConnect()` to VaultService for proper cleanup.
+---
 
-### Known Issues
+## Package Versions
 
-- **Windows PlatformException**: `Could not set client, view ID is null` errors still appear in debug console but don't block functionality. This is a known xterm/Flutter Windows issue.
-- **Key auth may fail**: If the private key in the vault doesn't match the public key authorized on the server, key auth fails. Use password auth or import the correct key.
-
-### Previous Changes
-
-- Terminal tab can load saved vault hosts to prefill connection details.
-- SSH connections now prompt for host-key verification and remember trusted fingerprints in the vault metadata.
-- Vault service exposes helpers to read/write trusted host keys; vault payload updates bump revision/updatedAt.
-- SSH core supports host-key verification callbacks with formatted fingerprints for UI prompts.
-- Terminal tab offers an experimental interactive shell powered by xterm, with host-selected connections and quick commands.
-- Connection form supports supplying a private-key passphrase.
+| Package | Version |
+|---------|---------|
+| ssh_client_app | 0.1.0 |
+| core_vault | 0.1.0 |
+| core_ssh | 0.1.0 |
+| core_sync | 0.1.0 |
+| ui_terminal | 0.1.0 |

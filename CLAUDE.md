@@ -50,6 +50,8 @@ GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and a
 - Binary vault format with header containing KDF params (Argon2id), cipher (XChaCha20-Poly1305 or AES-256-GCM), nonce, and payload length
 - `VaultFile` class handles create/open/save with atomic writes (temp file + rename)
 - Data models: `VaultHost`, `VaultIdentity`, `VaultSnippet`, `VaultSettings`
+- `VaultHost` includes tmux settings: `tmuxAutoAttach`, `tmuxSessionName`
+- `VaultSettings` includes appearance (theme, font) and SSH settings (keepalive, timeout, default port, auto-reconnect)
 - Trusted host keys stored in `VaultData.meta['trustedHostKeys']`
 
 **SSH Layer (core_ssh)**
@@ -65,12 +67,26 @@ GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and a
 - `autofocus` disabled by default to avoid Windows platform issues
 
 **App Structure (ssh_client_app)**
-- `lib/main.dart` - App shell, navigation, and `HomeShell` widget
+- `lib/main.dart` - App shell with vertical sidebar, settings dialog, and `HomeShell` widget
 - `lib/screens/` - Separated screen widgets:
   - `vault_screen.dart` - Vault creation/unlock UI
   - `hosts_screen.dart` - Host and identity management
-  - `terminal_screen.dart` - Terminus-like multi-tab SSH terminal
+  - `terminal_screen.dart` - Terminus-like multi-tab SSH terminal with tmux integration
 - `lib/services/vault_service.dart` - Orchestrates vault operations via `ValueNotifier<VaultState>`
+
+**UI Architecture**
+- Vertical sidebar (56px) with navigation icons at top, rotated "VibedTerm" branding above settings gear at bottom
+- No top AppBar - maximizes terminal screen space
+- Settings dialog with Appearance (themes, fonts) and SSH (keepalive, timeout) tabs
+- App-wide theming: `TerminalThemeConverter` generates Flutter `ThemeData` from terminal theme colors
+
+**tmux Integration**
+- `VaultHost` has `tmuxAutoAttach` and `tmuxSessionName` fields for per-host configuration
+- On connect, if tmux enabled: runs `tmux list-sessions` via `SshConnectionManager.runCommand()`
+- `TmuxSession.parseListSessions()` parses tmux output format
+- Session picker dialog shown when multiple sessions exist
+- `_ConnectionTab.attachedTmuxSession` tracks current session, shown in tab header
+- Session manager UI accessible via grid icon in status bar
 
 **Terminal Architecture (Terminus-like)**
 - Each tab (`_ConnectionTab`) owns its own `SshConnectionManager` - independent connections
@@ -161,8 +177,9 @@ PlatformException(Internal Consistency Error, Set editing state has been invoked
 When navigating this codebase, these are the most important files:
 
 - `melos.yaml` - Monorepo configuration and scripts
-- `packages/core_vault/lib/core_vault.dart` - Full vault implementation (~960 lines)
-- `packages/core_ssh/lib/core_ssh.dart` - SSH connection manager (~360 lines)
-- `packages/ui_terminal/lib/ui_terminal.dart` - Terminal bridge (~140 lines)
-- `apps/ssh_client_app/lib/screens/terminal_screen.dart` - Main terminal UI (~1050 lines)
-- `apps/ssh_client_app/lib/services/vault_service.dart` - State orchestration (~480 lines)
+- `packages/core_vault/lib/core_vault.dart` - Vault implementation with all data models
+- `packages/core_ssh/lib/core_ssh.dart` - SSH connection manager with tmux support
+- `packages/ui_terminal/lib/ui_terminal.dart` - Terminal bridge and theme converter
+- `apps/ssh_client_app/lib/main.dart` - App shell, sidebar, settings dialog
+- `apps/ssh_client_app/lib/screens/terminal_screen.dart` - Multi-tab terminal with tmux integration
+- `apps/ssh_client_app/lib/services/vault_service.dart` - State orchestration
