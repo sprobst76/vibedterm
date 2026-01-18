@@ -1,0 +1,53 @@
+services:
+  server:
+    build: .
+    environment:
+      - SERVER_ADDR=:8080
+      - GIN_MODE=release
+      - DATABASE_URL=postgres://vibedterm:${POSTGRES_PASSWORD}@postgres:5432/vibedterm?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_DURATION=15m
+      - JWT_REFRESH_DURATION=720h
+      - TOTP_ISSUER=VibedTerm
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - vibedterm
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vibedterm.rule=Host(`vibedterm.lab.example.com`)"
+      - "traefik.http.routers.vibedterm.entrypoints=websecure"
+      - "traefik.http.routers.vibedterm.tls=true"
+      - "traefik.http.routers.vibedterm.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vibedterm.loadbalancer.server.port=8080"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=vibedterm
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=vibedterm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibedterm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vibedterm
+
+volumes:
+  postgres_data:
+
+networks:
+  vibedterm:
+    driver: bridge
+  traefik:
+    external: true
