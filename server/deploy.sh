@@ -30,13 +30,13 @@ if ! docker compose version &> /dev/null; then
     exit 1
 fi
 
-# Check Traefik network
-if ! docker network ls | grep -q traefik; then
-    echo -e "${YELLOW}Creating traefik network...${NC}"
-    docker network create traefik
-    echo -e "${GREEN}✓ Traefik network created${NC}"
+# Check ai-lab network
+if ! docker network ls | grep -q ai-lab_ai-lab; then
+    echo -e "${RED}Error: ai-lab_ai-lab network not found${NC}"
+    echo "Make sure your ai-lab stack is running"
+    exit 1
 else
-    echo -e "${GREEN}✓ Traefik network exists${NC}"
+    echo -e "${GREEN}✓ ai-lab_ai-lab network exists${NC}"
 fi
 
 # Setup .env file
@@ -54,6 +54,7 @@ if [ ! -f .env ]; then
 
     echo -e "${GREEN}✓ Generated secure POSTGRES_PASSWORD${NC}"
     echo -e "${GREEN}✓ Generated secure JWT_SECRET${NC}"
+    echo -e "${GREEN}✓ Domain set to example.com${NC}"
     echo ""
     echo -e "${YELLOW}Please edit .env to set:${NC}"
     echo "  - ADMIN_EMAIL"
@@ -105,8 +106,8 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║              Deployment Complete!                         ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo "  API Health:  https://vibedterm.lab.example.com/health"
-echo "  Admin Panel: https://vibedterm.lab.example.com/admin/"
+echo "  API Health:  https://vibedterm.lab.$DOMAIN/health"
+echo "  Admin Panel: https://vibedterm.lab.$DOMAIN/admin/"
 echo ""
 echo "  Admin Login: $ADMIN_EMAIL"
 echo ""
