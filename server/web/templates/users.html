@@ -1,0 +1,135 @@
+{{define "users.html"}}
+{{template "layout" .}}
+{{end}}
+
+{{define "content"}}
+<div class="users-page">
+    <h1 class="page-title">User Management</h1>
+
+    {{if .Success}}
+    <div class="alert alert-success">
+        {{.Success}}
+    </div>
+    {{end}}
+
+    {{if .Error}}
+    <div class="alert alert-error">
+        {{.Error}}
+    </div>
+    {{end}}
+
+    {{if .PendingUsers}}
+    <section class="card">
+        <div class="card-header">
+            <h2>
+                <span class="badge badge-warning">{{len .PendingUsers}}</span>
+                Pending Approval
+            </h2>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Registered</th>
+                        <th class="actions-col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .PendingUsers}}
+                    <tr>
+                        <td>{{.Email}}</td>
+                        <td>{{timeAgo .CreatedAt}}</td>
+                        <td class="actions-col">
+                            <form action="/admin/users/{{.ID}}/approve" method="POST" class="inline-form">
+                                <button type="submit" class="btn btn-success btn-sm">Approve</button>
+                            </form>
+                            <form action="/admin/users/{{.ID}}/reject" method="POST" class="inline-form"
+                                  onsubmit="return confirm('Are you sure you want to reject this user? This will delete their account.')">
+                                <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {{end}}
+
+    <section class="card">
+        <div class="card-header">
+            <h2>All Users</h2>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>2FA</th>
+                        <th>Last Login</th>
+                        <th class="actions-col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .AllUsers}}
+                    <tr>
+                        <td>{{.Email}}</td>
+                        <td>
+                            {{if .IsAdmin}}
+                            <span class="badge badge-primary">Admin</span>
+                            {{else if .IsBlocked}}
+                            <span class="badge badge-danger">Blocked</span>
+                            {{else if .IsApproved}}
+                            <span class="badge badge-success">Active</span>
+                            {{else}}
+                            <span class="badge badge-warning">Pending</span>
+                            {{end}}
+                        </td>
+                        <td>
+                            {{if .TOTPEnabled}}
+                            <span class="badge badge-info">Enabled</span>
+                            {{else}}
+                            <span class="text-muted">-</span>
+                            {{end}}
+                        </td>
+                        <td>
+                            {{if .LastLoginAt}}
+                            {{timeAgo .LastLoginAt}}
+                            {{else}}
+                            <span class="text-muted">Never</span>
+                            {{end}}
+                        </td>
+                        <td class="actions-col">
+                            {{if .IsAdmin}}
+                            <span class="text-muted">-</span>
+                            {{else if .IsBlocked}}
+                            <form action="/admin/users/{{.ID}}/block" method="POST" class="inline-form">
+                                <input type="hidden" name="action" value="unblock">
+                                <button type="submit" class="btn btn-secondary btn-sm">Unblock</button>
+                            </form>
+                            {{else if .IsApproved}}
+                            <form action="/admin/users/{{.ID}}/block" method="POST" class="inline-form"
+                                  onsubmit="return confirm('Are you sure you want to block this user?')">
+                                <input type="hidden" name="action" value="block">
+                                <button type="submit" class="btn btn-warning btn-sm">Block</button>
+                            </form>
+                            {{else}}
+                            <form action="/admin/users/{{.ID}}/approve" method="POST" class="inline-form">
+                                <button type="submit" class="btn btn-success btn-sm">Approve</button>
+                            </form>
+                            <form action="/admin/users/{{.ID}}/reject" method="POST" class="inline-form"
+                                  onsubmit="return confirm('Are you sure you want to reject this user?')">
+                                <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+                            </form>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{{end}}

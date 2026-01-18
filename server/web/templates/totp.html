@@ -1,0 +1,42 @@
+{{define "totp.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - VibedTerm Admin</title>
+    <link rel="stylesheet" href="/admin/static/css/admin.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>Two-Factor Authentication</h1>
+                <p>Enter the code from your authenticator app</p>
+            </div>
+            {{if .Error}}
+            <div class="alert alert-error">
+                {{.Error}}
+            </div>
+            {{end}}
+            <form action="/admin/login/totp" method="POST" class="login-form">
+                <div class="form-group">
+                    <label for="code">Authentication Code</label>
+                    <input type="text" id="code" name="code" required autofocus
+                           pattern="[0-9]{6}" maxlength="6"
+                           placeholder="000000"
+                           class="totp-input"
+                           autocomplete="one-time-code">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    Verify
+                </button>
+            </form>
+            <div class="login-footer">
+                <a href="/admin/login" class="link-secondary">Back to login</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+{{end}}

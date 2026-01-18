@@ -339,6 +339,45 @@ class AuthService {
     return _api.deleteDevice(deviceId);
   }
 
+  /// Refresh the current auth status.
+  ///
+  /// This is useful to check if a pending approval has been granted
+  /// by an administrator without having to logout and login again.
+  Future<void> refreshAuthStatus() async {
+    // Only refresh if we have stored tokens
+    final refreshToken = await _storage.read(key: _refreshTokenKey);
+    if (refreshToken == null) {
+      return;
+    }
+
+    try {
+      // Try to refresh the access token
+      await _api.refreshAccessToken();
+
+      // If we get here, the token is valid - get current device to verify
+      final device = await _api.getCurrentDevice();
+      final storedDeviceId = await _storage.read(key: _deviceIdKey);
+
+      _updateStatus(AuthStatus(
+        state: AuthState.authenticated,
+        deviceId: device.id.isNotEmpty ? device.id : storedDeviceId,
+      ));
+
+      // Save refreshed token
+      await _storage.write(
+        key: _accessTokenKey,
+        value: _api._accessToken,
+      );
+    } on SyncException catch (e) {
+      if (e.isPendingApproval) {
+        _updateStatus(const AuthStatus(state: AuthState.pendingApproval));
+      } else if (e.isAccountBlocked) {
+        _updateStatus(const AuthStatus(state: AuthState.blocked));
+      }
+      // For other errors, keep current status
+    }
+  }
+
   /// Dispose resources.
   void dispose() {
     _statusController.close();

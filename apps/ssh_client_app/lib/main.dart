@@ -328,6 +328,10 @@ class _HomeShellState extends State<HomeShell> {
           icon = Icons.cloud_off_outlined;
           color = colorScheme.onSurface.withOpacity(0.3);
           tooltip = 'Sync not configured';
+        } else if (status.authState == AuthState.pendingApproval) {
+          icon = Icons.hourglass_empty;
+          color = Colors.orange;
+          tooltip = 'Account pending admin approval';
         } else if (!status.isAuthenticated) {
           icon = Icons.cloud_off_outlined;
           color = colorScheme.onSurface.withOpacity(0.5);
@@ -387,9 +391,24 @@ class _HomeShellState extends State<HomeShell> {
                         ),
                       ),
                     ),
+                  // Show badge for pending approval
+                  if (status.authState == AuthState.pendingApproval)
+                    Positioned(
+                      right: 14,
+                      top: 8,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
                   // Show badge for conflict or error
-                  if (syncState == SyncState.conflict ||
-                      syncState == SyncState.error)
+                  if (status.authState != AuthState.pendingApproval &&
+                      (syncState == SyncState.conflict ||
+                      syncState == SyncState.error))
                     Positioned(
                       right: 14,
                       top: 8,
@@ -419,6 +438,7 @@ class _HomeShellState extends State<HomeShell> {
       initialData: widget.syncManager.status,
       builder: (context, snapshot) {
         final status = snapshot.data ?? CombinedSyncStatus.disconnected;
+        final isPending = status.authState == AuthState.pendingApproval;
         final hasIssue = status.syncState == SyncState.conflict ||
             status.syncState == SyncState.error;
 
@@ -438,7 +458,20 @@ class _HomeShellState extends State<HomeShell> {
                   ),
                 ),
               ),
-            if (hasIssue)
+            if (isPending)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            if (!isPending && hasIssue)
               Positioned(
                 right: 0,
                 top: 0,
@@ -1053,31 +1086,114 @@ class _SettingsDialogState extends State<_SettingsDialog>
     return Center(
       child: Column(
         children: [
-          const SizedBox(height: 32),
-          Icon(Icons.hourglass_empty,
-              size: 64, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 24),
+          // Animated hourglass
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(seconds: 2),
+            builder: (context, value, child) {
+              return Transform.rotate(
+                angle: value * 3.14159 * 2,
+                child: child,
+              );
+            },
+            onEnd: () {
+              // Restart animation
+              setState(() {});
+            },
+            child: const Icon(
+              Icons.hourglass_empty,
+              size: 56,
+              color: Colors.orange,
+            ),
+          ),
           const SizedBox(height: 16),
           Text(
             'Account Pending Approval',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 8),
-          Text(
-            'Your account is waiting for administrator approval.\nYou will be able to login once approved.',
-            style: Theme.of(context).textTheme.bodySmall,
-            textAlign: TextAlign.center,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Your account is waiting for administrator approval. '
+              'You will be notified once an admin has reviewed your registration.',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
           ),
           const SizedBox(height: 24),
-          TextButton(
-            onPressed: () async {
-              await widget.syncManager.disconnect();
-              setState(() {});
-            },
-            child: const Text('Use Different Account'),
+          // Check Status button
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _isSyncBusy ? null : _checkApprovalStatus,
+              icon: _isSyncBusy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(_isSyncBusy ? 'Checking...' : 'Check Status'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Use different account button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _isSyncBusy
+                  ? null
+                  : () async {
+                      await widget.syncManager.disconnect();
+                      setState(() {});
+                    },
+              child: const Text('Use Different Account'),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _checkApprovalStatus() async {
+    setState(() {
+      _isSyncBusy = true;
+      _syncError = null;
+    });
+
+    try {
+      await widget.syncManager.refreshAuthStatus();
+      // Check if we're now authenticated
+      final status = widget.syncManager.status;
+      if (status.isAuthenticated) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Your account has been approved!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (status.authState == AuthState.pendingApproval) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Still waiting for admin approval'),
+            ),
+          );
+        }
+      }
+    } on SyncException catch (e) {
+      setState(() => _syncError = e.message);
+    } catch (e) {
+      setState(() => _syncError = 'Failed to check status: $e');
+    } finally {
+      if (mounted) setState(() => _isSyncBusy = false);
+    }
   }
 
   Widget _buildAuthenticatedView(CombinedSyncStatus status) {

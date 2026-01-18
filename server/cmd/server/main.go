@@ -18,6 +18,7 @@ import (
 	"github.com/sprobst76/vibedterm-server/internal/handlers"
 	"github.com/sprobst76/vibedterm-server/internal/middleware"
 	"github.com/sprobst76/vibedterm-server/internal/repository"
+	"github.com/sprobst76/vibedterm-server/internal/web"
 )
 
 func main() {
@@ -56,6 +57,12 @@ func main() {
 	deviceHandler := handlers.NewDeviceHandler(deviceRepo, refreshRepo)
 	adminHandler := handlers.NewAdminHandler(userRepo, deviceRepo, vaultRepo, refreshRepo)
 
+	// Create admin web interface
+	adminWeb, err := web.NewAdminWeb(userRepo, deviceRepo, vaultRepo, refreshRepo)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create admin web interface")
+	}
+
 	// Setup Gin
 	gin.SetMode(cfg.ServerMode)
 	r := gin.New()
@@ -64,6 +71,9 @@ func main() {
 
 	// CORS middleware
 	r.Use(corsMiddleware())
+
+	// Register admin web interface routes
+	adminWeb.RegisterRoutes(r)
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {

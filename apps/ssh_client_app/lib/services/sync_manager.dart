@@ -332,6 +332,14 @@ class SyncManager {
     _syncService?.clearConflict();
   }
 
+  /// Refresh the current auth status.
+  ///
+  /// This is useful to check if a pending approval has been granted
+  /// by an administrator without having to logout and login again.
+  Future<void> refreshAuthStatus() async {
+    await _authService?.refreshAuthStatus();
+  }
+
   /// Disconnect and clear sync configuration.
   Future<void> disconnect() async {
     await _authService?.logout();

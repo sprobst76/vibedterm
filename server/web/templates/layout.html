@@ -1,0 +1,33 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - VibedTerm Admin</title>
+    <link rel="stylesheet" href="/admin/static/css/admin.css">
+</head>
+<body>
+    <div class="app">
+        {{if .Email}}
+        <nav class="navbar">
+            <div class="navbar-brand">VibedTerm Admin</div>
+            <div class="navbar-menu">
+                <a href="/admin/dashboard" class="nav-link{{if eq .Title "Dashboard"}} active{{end}}">Dashboard</a>
+                <a href="/admin/users" class="nav-link{{if eq .Title "Users"}} active{{end}}">Users</a>
+            </div>
+            <div class="navbar-end">
+                <span class="user-email">{{.Email}}</span>
+                <form action="/admin/logout" method="POST" class="logout-form">
+                    <button type="submit" class="btn btn-ghost">Logout</button>
+                </form>
+            </div>
+        </nav>
+        {{end}}
+        <main class="main-content">
+            {{template "content" .}}
+        </main>
+    </div>
+</body>
+</html>
+{{end}}
