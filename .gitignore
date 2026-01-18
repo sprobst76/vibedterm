@@ -32,3 +32,8 @@ windows/flutter/ephemeral/
 .DS_Store
 Thumbs.db
 VibedTerm-v0.1.0-android.apk
+
+# Sensitive config files
+**/config.json
+.env
+.env.local
