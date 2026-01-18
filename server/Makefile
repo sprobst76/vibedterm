@@ -98,8 +98,8 @@ prod:
 	docker compose -f docker-compose.prod.yml up -d --build
 	@echo ""
 	@echo "✅ VibedTerm is running!"
-	@echo "   Health: https://vibedterm.lab.halbewahrheit21.de/health"
-	@echo "   Admin:  https://vibedterm.lab.halbewahrheit21.de/admin/"
+	@echo "   Health: https://vibedterm.lab.$${DOMAIN:-halbewahrheit21.de}/health"
+	@echo "   Admin:  https://vibedterm.lab.$${DOMAIN:-halbewahrheit21.de}/admin/"
 
 prod-up:
 	docker compose -f docker-compose.prod.yml up -d
