@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-//go:embed ../../web/templates/*.html
+//go:embed templates/*.html
 var templateFS embed.FS
 
-//go:embed ../../web/static/css/*.css
+//go:embed static/css/*.css
 var staticFS embed.FS
 
 // Templates holds all parsed templates
@@ -26,7 +26,7 @@ func NewTemplates() (*Templates, error) {
 		"timeAgo":    timeAgo,
 	}
 
-	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "web/templates/*.html")
+	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
