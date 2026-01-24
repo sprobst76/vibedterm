@@ -896,22 +896,43 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      focusNode: widget.focusNode,
-      autofocus: widget.autofocus,
-      onKeyEvent: _handleKeyEvent,
-      child: TerminalView(
-        widget.bridge.terminal,
-        controller: widget.bridge.terminalController,
-        theme: _terminalTheme,
-        textStyle: _terminalStyle,
-        cursorType: _cursorType,
-        backgroundOpacity: widget.opacity,
-        autofocus: false,
-        padding: const EdgeInsets.all(8),
-        // Enable mouse support for selection and scrolling
-        hardwareKeyboardOnly: true,
+    return Shortcuts(
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.keyC, control: true, shift: true):
+            const _CopySelectionIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true, shift: true):
+            const _PasteIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _CopySelectionIntent: CallbackAction<_CopySelectionIntent>(
+            onInvoke: (_) { _copySelection(); return null; },
+          ),
+          _PasteIntent: CallbackAction<_PasteIntent>(
+            onInvoke: (_) { _pasteClipboard(); return null; },
+          ),
+        },
+        child: TerminalView(
+          widget.bridge.terminal,
+          controller: widget.bridge.terminalController,
+          theme: _terminalTheme,
+          textStyle: _terminalStyle,
+          cursorType: _cursorType,
+          backgroundOpacity: widget.opacity,
+          autofocus: widget.autofocus,
+          focusNode: widget.focusNode,
+          padding: const EdgeInsets.all(8),
+        ),
       ),
     );
   }
+}
+
+// Intent classes for keyboard shortcuts
+class _CopySelectionIntent extends Intent {
+  const _CopySelectionIntent();
+}
+
+class _PasteIntent extends Intent {
+  const _PasteIntent();
 }
