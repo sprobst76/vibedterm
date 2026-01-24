@@ -71,13 +71,13 @@ func (a *AdminWeb) RegisterRoutes(r *gin.Engine) {
 		protected := admin.Group("")
 		protected.Use(a.authMiddleware())
 		{
-			admin.GET("/", a.index)
-			admin.GET("/dashboard", a.dashboard)
-			admin.GET("/users", a.usersPage)
-			admin.POST("/users/:id/approve", a.approveUser)
-			admin.POST("/users/:id/reject", a.rejectUser)
-			admin.POST("/users/:id/block", a.blockUser)
-			admin.POST("/logout", a.logout)
+			protected.GET("/", a.index)
+			protected.GET("/dashboard", a.dashboard)
+			protected.GET("/users", a.usersPage)
+			protected.POST("/users/:id/approve", a.approveUser)
+			protected.POST("/users/:id/reject", a.rejectUser)
+			protected.POST("/users/:id/block", a.blockUser)
+			protected.POST("/logout", a.logout)
 		}
 	}
 }
