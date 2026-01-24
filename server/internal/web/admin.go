@@ -54,7 +54,7 @@ func NewAdminWeb(
 // RegisterRoutes registers all admin web routes
 func (a *AdminWeb) RegisterRoutes(r *gin.Engine) {
 	// Serve static files
-	staticSubFS, err := fs.Sub(GetStaticFS(), "web/static")
+	staticSubFS, err := fs.Sub(GetStaticFS(), "static")
 	if err == nil {
 		r.StaticFS("/admin/static", http.FS(staticSubFS))
 	}
