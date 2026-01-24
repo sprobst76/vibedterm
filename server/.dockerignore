@@ -1,0 +1,24 @@
+# Data directories
+data/
+
+# Build outputs
+bin/
+
+# Docker compose files
+docker-compose*.yml
+
+# Environment files
+.env
+.env.example
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Scripts
+*.sh
+Makefile
