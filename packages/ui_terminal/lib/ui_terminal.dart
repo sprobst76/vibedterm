@@ -1048,6 +1048,7 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
           backgroundOpacity: widget.opacity,
           autofocus: false,
           padding: const EdgeInsets.all(8),
+          simulateScroll: true,
         ),
       );
     }
@@ -1066,6 +1067,8 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
         backgroundOpacity: widget.opacity,
         autofocus: false,
         padding: const EdgeInsets.all(8),
+        // Enable scroll simulation for alternate buffer (vim, less, etc.)
+        simulateScroll: true,
       ),
     );
   }
