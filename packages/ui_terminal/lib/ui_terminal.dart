@@ -1042,45 +1042,6 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     if (_effectiveFocusNode == null) {
       return GestureDetector(
         onTap: _activateFocus,
-        child: Listener(
-          onPointerSignal: (event) {
-            if (event is PointerScrollEvent) {
-              final offset = _scrollController.offset - event.scrollDelta.dy;
-              final maxScroll = _scrollController.position.maxScrollExtent;
-              final clampedOffset = offset.clamp(0.0, maxScroll);
-              _scrollController.jumpTo(clampedOffset);
-            }
-          },
-          child: TerminalView(
-            widget.bridge.terminal,
-            controller: widget.bridge.controller,
-            scrollController: _scrollController,
-            theme: _terminalTheme,
-            textStyle: _terminalStyle,
-            cursorType: _cursorType,
-            backgroundOpacity: widget.opacity,
-            autofocus: false,
-            padding: const EdgeInsets.all(8),
-          ),
-        ),
-      );
-    }
-
-    // Use RawKeyboardListener for keyboard input - this should not block mouse events
-    // unlike Focus widget which can interfere with gesture recognition.
-    return RawKeyboardListener(
-      focusNode: _effectiveFocusNode!,
-      onKey: _handleRawKey,
-      child: Listener(
-        onPointerSignal: (event) {
-          if (event is PointerScrollEvent) {
-            // Manually handle scroll since xterm may not scroll properly on Windows
-            final offset = _scrollController.offset - event.scrollDelta.dy;
-            final maxScroll = _scrollController.position.maxScrollExtent;
-            final clampedOffset = offset.clamp(0.0, maxScroll);
-            _scrollController.jumpTo(clampedOffset);
-          }
-        },
         child: TerminalView(
           widget.bridge.terminal,
           controller: widget.bridge.controller,
@@ -1092,6 +1053,26 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
           autofocus: false,
           padding: const EdgeInsets.all(8),
         ),
+      );
+    }
+
+    // Use RawKeyboardListener for keyboard input.
+    // TerminalView handles mouse selection and scrolling internally.
+    // If scrolling doesn't work, it may be because the remote app (tmux, vim)
+    // has mouse tracking enabled, which sends scroll events to the server.
+    return RawKeyboardListener(
+      focusNode: _effectiveFocusNode!,
+      onKey: _handleRawKey,
+      child: TerminalView(
+        widget.bridge.terminal,
+        controller: widget.bridge.controller,
+        scrollController: _scrollController,
+        theme: _terminalTheme,
+        textStyle: _terminalStyle,
+        cursorType: _cursorType,
+        backgroundOpacity: widget.opacity,
+        autofocus: false,
+        padding: const EdgeInsets.all(8),
       ),
     );
   }
