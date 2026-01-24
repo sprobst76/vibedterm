@@ -1042,6 +1042,53 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     if (_effectiveFocusNode == null) {
       return GestureDetector(
         onTap: _activateFocus,
+        child: Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              if (HardwareKeyboard.instance.isShiftPressed) {
+                if (_scrollController.hasClients) {
+                  final offset = _scrollController.offset + event.scrollDelta.dy;
+                  final maxScroll = _scrollController.position.maxScrollExtent;
+                  _scrollController.jumpTo(offset.clamp(0.0, maxScroll));
+                }
+              }
+            }
+          },
+          child: TerminalView(
+            widget.bridge.terminal,
+            controller: widget.bridge.controller,
+            scrollController: _scrollController,
+            theme: _terminalTheme,
+            textStyle: _terminalStyle,
+            cursorType: _cursorType,
+            backgroundOpacity: widget.opacity,
+            autofocus: false,
+            padding: const EdgeInsets.all(8),
+          ),
+        ),
+      );
+    }
+
+    // Use RawKeyboardListener for keyboard input.
+    // Wrap in Listener to intercept Shift+Scroll for local buffer scrolling.
+    // Normal scroll goes to terminal (tmux/vim), Shift+scroll scrolls locally.
+    return RawKeyboardListener(
+      focusNode: _effectiveFocusNode!,
+      onKey: _handleRawKey,
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent) {
+            // Check if Shift is held - if so, scroll local buffer
+            if (HardwareKeyboard.instance.isShiftPressed) {
+              if (_scrollController.hasClients) {
+                final offset = _scrollController.offset + event.scrollDelta.dy;
+                final maxScroll = _scrollController.position.maxScrollExtent;
+                _scrollController.jumpTo(offset.clamp(0.0, maxScroll));
+              }
+            }
+            // If Shift not pressed, let event pass through to TerminalView (tmux)
+          }
+        },
         child: TerminalView(
           widget.bridge.terminal,
           controller: widget.bridge.controller,
@@ -1053,26 +1100,6 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
           autofocus: false,
           padding: const EdgeInsets.all(8),
         ),
-      );
-    }
-
-    // Use RawKeyboardListener for keyboard input.
-    // TerminalView handles mouse selection and scrolling internally.
-    // If scrolling doesn't work, it may be because the remote app (tmux, vim)
-    // has mouse tracking enabled, which sends scroll events to the server.
-    return RawKeyboardListener(
-      focusNode: _effectiveFocusNode!,
-      onKey: _handleRawKey,
-      child: TerminalView(
-        widget.bridge.terminal,
-        controller: widget.bridge.controller,
-        scrollController: _scrollController,
-        theme: _terminalTheme,
-        textStyle: _terminalStyle,
-        cursorType: _cursorType,
-        backgroundOpacity: widget.opacity,
-        autofocus: false,
-        padding: const EdgeInsets.all(8),
       ),
     );
   }
