@@ -45,6 +45,7 @@ library ui_terminal;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:xterm/xterm.dart';
@@ -826,6 +827,7 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
   OverlayEntry? _inputOverlay;
+  final ScrollController _scrollController = ScrollController();
 
   FocusNode? get _effectiveFocusNode => widget.focusNode ?? _internalFocusNode;
 
@@ -859,6 +861,7 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     }
     _inputController.dispose();
     _inputFocusNode.dispose();
+    _scrollController.dispose();
     _inputOverlay?.remove();
     super.dispose();
   }
@@ -1039,16 +1042,26 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     if (_effectiveFocusNode == null) {
       return GestureDetector(
         onTap: _activateFocus,
-        child: TerminalView(
-          widget.bridge.terminal,
-          controller: widget.bridge.controller,
-          theme: _terminalTheme,
-          textStyle: _terminalStyle,
-          cursorType: _cursorType,
-          backgroundOpacity: widget.opacity,
-          autofocus: false,
-          padding: const EdgeInsets.all(8),
-          simulateScroll: true,
+        child: Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              final offset = _scrollController.offset - event.scrollDelta.dy;
+              final maxScroll = _scrollController.position.maxScrollExtent;
+              final clampedOffset = offset.clamp(0.0, maxScroll);
+              _scrollController.jumpTo(clampedOffset);
+            }
+          },
+          child: TerminalView(
+            widget.bridge.terminal,
+            controller: widget.bridge.controller,
+            scrollController: _scrollController,
+            theme: _terminalTheme,
+            textStyle: _terminalStyle,
+            cursorType: _cursorType,
+            backgroundOpacity: widget.opacity,
+            autofocus: false,
+            padding: const EdgeInsets.all(8),
+          ),
         ),
       );
     }
@@ -1058,17 +1071,27 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     return RawKeyboardListener(
       focusNode: _effectiveFocusNode!,
       onKey: _handleRawKey,
-      child: TerminalView(
-        widget.bridge.terminal,
-        controller: widget.bridge.controller,
-        theme: _terminalTheme,
-        textStyle: _terminalStyle,
-        cursorType: _cursorType,
-        backgroundOpacity: widget.opacity,
-        autofocus: false,
-        padding: const EdgeInsets.all(8),
-        // Enable scroll simulation for alternate buffer (vim, less, etc.)
-        simulateScroll: true,
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent) {
+            // Manually handle scroll since xterm may not scroll properly on Windows
+            final offset = _scrollController.offset - event.scrollDelta.dy;
+            final maxScroll = _scrollController.position.maxScrollExtent;
+            final clampedOffset = offset.clamp(0.0, maxScroll);
+            _scrollController.jumpTo(clampedOffset);
+          }
+        },
+        child: TerminalView(
+          widget.bridge.terminal,
+          controller: widget.bridge.controller,
+          scrollController: _scrollController,
+          theme: _terminalTheme,
+          textStyle: _terminalStyle,
+          cursorType: _cursorType,
+          backgroundOpacity: widget.opacity,
+          autofocus: false,
+          padding: const EdgeInsets.all(8),
+        ),
       ),
     );
   }
