@@ -684,7 +684,8 @@ class TerminalBridge {
       : terminal = initialTerminal ??
             Terminal(
               maxLines: 2000,
-            ) {
+            ),
+        terminalController = TerminalController() {
     terminal.onOutput = (data) {
       onOutput?.call(data);
     };
@@ -692,6 +693,9 @@ class TerminalBridge {
 
   /// The underlying xterm Terminal instance.
   final Terminal terminal;
+
+  /// Controller for terminal view (selection, scrolling).
+  final TerminalController terminalController;
 
   final List<StreamSubscription<List<int>>> _subscriptions = [];
 
@@ -730,52 +734,16 @@ class TerminalBridge {
     terminal.onOutput = null;
   }
 
-  /// Try to read selected text from the underlying xterm Terminal instance.
-  /// Returns null when no selection or not accessible.
+  /// Get selected text from terminal using the controller.
   String? getSelectedText() {
-    try {
-      final t = terminal as dynamic;
-      // common direct properties
-      try {
-        final v = t.selectedText;
-        if (v is String && v.isNotEmpty) return v;
-      } catch (_) {}
-      try {
-        final v = t.selection;
-        if (v is String && v.isNotEmpty) return v;
-        if (v != null) {
-          final s = v.toString();
-          if (s.isNotEmpty) return s;
-        }
-      } catch (_) {}
+    final selection = terminalController.selection;
+    if (selection == null) return null;
+    return terminal.buffer.getText(selection);
+  }
 
-      // buffer-based accessors
-      try {
-        final buf = t.buffer as dynamic;
-        try {
-          final v = buf.selectedText;
-          if (v is String && v.isNotEmpty) return v;
-        } catch (_) {}
-        try {
-          final v = buf.getSelectedText();
-          if (v is String && v.isNotEmpty) return v;
-        } catch (_) {}
-        try {
-          final v = buf.getSelection();
-          if (v != null) {
-            final s = v.toString();
-            if (s.isNotEmpty) return s;
-          }
-        } catch (_) {}
-      } catch (_) {}
-
-      // last resort: try calling common-named methods on terminal
-      try {
-        final v = t.getSelectedText();
-        if (v is String && v.isNotEmpty) return v;
-      } catch (_) {}
-    } catch (_) {}
-    return null;
+  /// Clear the current selection.
+  void clearSelection() {
+    terminalController.clearSelection();
   }
 
   void _cancelSubscriptions() {
@@ -796,8 +764,8 @@ class TerminalBridge {
 /// - Configurable color themes
 /// - Adjustable font size and family
 /// - Multiple cursor styles
-/// - Cross-platform keyboard input handling
-/// - Selection and copy support
+/// - Mouse selection and copy (Ctrl+Shift+C or auto-copy on selection)
+/// - Mouse wheel scrolling
 ///
 /// ## Example
 ///
@@ -853,14 +821,6 @@ class VibedTerminalView extends StatefulWidget {
 }
 
 class _VibedTerminalViewState extends State<VibedTerminalView> {
-  FocusNode? _internalFocusNode;
-  bool _activated = false;
-  final TextEditingController _inputController = TextEditingController();
-  final FocusNode _inputFocusNode = FocusNode();
-  OverlayEntry? _inputOverlay;
-
-  FocusNode? get _effectiveFocusNode => widget.focusNode ?? _internalFocusNode;
-
   /// Get the TerminalTheme from the preset name.
   TerminalTheme get _terminalTheme =>
       TerminalThemePresets.getTheme(widget.themeName);
@@ -883,252 +843,74 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     }
   }
 
-  @override
-  void dispose() {
-    // Only dispose focus node if we created it here.
-    if (_internalFocusNode != null) {
-      _internalFocusNode!.dispose();
+  /// Copy selected text to clipboard.
+  Future<void> _copySelection() async {
+    final text = widget.bridge.getSelectedText();
+    if (text != null && text.isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: text));
     }
-    _inputController.dispose();
-    _inputFocusNode.dispose();
-    _inputOverlay?.remove();
-    super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Overlay insertion is deferred until activation to avoid TextInput
-    // client races with TerminalView. The overlay will be created when the
-    // widget is explicitly activated (tap/focus) by calling _activateFocus().
+  /// Paste from clipboard to terminal.
+  Future<void> _pasteClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null && data!.text!.isNotEmpty) {
+      widget.bridge.onOutput?.call(data.text!);
+    }
   }
 
-  void _activateFocus() {
-    if (_activated) return;
-    if (widget.focusNode != null) {
-      // external focus node provided, just request focus on it
-      // Request focus for our hidden input field as well so IME attaches.
-      // ignore: avoid_print
-      print(
-          '[IME-DEBUG] activateFocus: requesting external focus and input focus');
-      widget.focusNode!.requestFocus();
-      _activated = true;
-      // Insert overlay now and request input focus after insertion.
-      if (_inputOverlay == null) {
-        _createAndInsertOverlay();
+  /// Handle keyboard shortcuts that shouldn't go to the terminal.
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+
+    // Ctrl+Shift+C = Copy selection
+    if (isCtrl && isShift && event.logicalKey == LogicalKeyboardKey.keyC) {
+      _copySelection();
+      return KeyEventResult.handled;
+    }
+
+    // Ctrl+Shift+V = Paste
+    if (isCtrl && isShift && event.logicalKey == LogicalKeyboardKey.keyV) {
+      _pasteClipboard();
+      return KeyEventResult.handled;
+    }
+
+    // Ctrl+C without selection = send interrupt (let xterm handle it)
+    // Ctrl+C with selection = copy (terminal convention)
+    if (isCtrl && !isShift && event.logicalKey == LogicalKeyboardKey.keyC) {
+      final text = widget.bridge.getSelectedText();
+      if (text != null && text.isNotEmpty) {
+        _copySelection();
+        widget.bridge.clearSelection();
+        return KeyEventResult.handled;
       }
-      try {
-        _inputFocusNode.requestFocus();
-      } catch (_) {}
-      return;
-    }
-    // create internal focus node and rebuild to attach it to TerminalView
-    _internalFocusNode = FocusNode();
-    _activated = true;
-    setState(() {});
-    // request focus and insert overlay in a post frame callback to avoid
-    // modifying the widget tree during build.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        try {
-          // ignore: avoid_print
-          print('[IME-DEBUG] postFrame: requesting internal and input focus');
-          _internalFocusNode!.requestFocus();
-          if (_inputOverlay == null) {
-            _createAndInsertOverlay();
-          }
-          _inputFocusNode.requestFocus();
-        } catch (_) {}
-      }
-    });
-  }
-
-  void _createAndInsertOverlay() {
-    _inputOverlay = OverlayEntry(
-      builder: (context) {
-        return Positioned(
-          left: 0,
-          top: 0,
-          width: 1,
-          height: 1,
-          child: Material(
-            type: MaterialType.transparency,
-            child: TextField(
-              controller: _inputController,
-              focusNode: _inputFocusNode,
-              autofocus: false,
-              showCursor: false,
-              enableInteractiveSelection: false,
-              decoration: const InputDecoration.collapsed(hintText: ''),
-              onSubmitted: (s) {
-                // On platforms where the overlay works, Enter might come here.
-                // But we also handle it in _handleRawKey, so just clear.
-                _inputController.clear();
-              },
-              // Character input is handled by _handleRawKey to avoid double-sending.
-              // The overlay TextField exists mainly for IME support on mobile platforms.
-              // On Windows, _handleRawKey handles everything.
-              onChanged: (s) {
-                // Clear the controller to prevent accumulation, but don't send
-                // characters here - _handleRawKey already handles them.
-                _inputController.clear();
-              },
-            ),
-          ),
-        );
-      },
-    );
-    try {
-      final overlay = Overlay.of(context, debugRequiredFor: widget);
-      overlay.insert(_inputOverlay!);
-    } catch (_) {}
-  }
-
-  void _handleRawKey(RawKeyEvent event) {
-    if (event is! RawKeyDownEvent) return;
-
-    // Helper to send data to SSH session or fall back to local echo
-    void sendToSession(String data) {
-      if (widget.bridge.onOutput != null) {
-        try {
-          widget.bridge.onOutput!(data);
-        } catch (_) {}
-      } else {
-        widget.bridge.debugWrite(data);
-      }
+      // No selection - let it pass through as Ctrl+C (interrupt)
     }
 
-    // Only handle special keys here - regular characters are handled by the
-    // overlay TextField to properly support IME and composed characters (umlauts etc.)
-    if (event.logicalKey == LogicalKeyboardKey.enter) {
-      sendToSession('\r');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.backspace) {
-      sendToSession('\x7f');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.tab) {
-      sendToSession('\t');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.escape) {
-      sendToSession('\x1b');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      sendToSession('\x1b[A');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      sendToSession('\x1b[B');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      sendToSession('\x1b[C');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      sendToSession('\x1b[D');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.home) {
-      sendToSession('\x1b[H');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.end) {
-      sendToSession('\x1b[F');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.pageUp) {
-      sendToSession('\x1b[5~');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.pageDown) {
-      sendToSession('\x1b[6~');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.delete) {
-      sendToSession('\x1b[3~');
-      return;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.insert) {
-      sendToSession('\x1b[2~');
-      return;
-    }
-
-    // Send regular characters - the overlay TextField approach doesn't work
-    // reliably on Windows, so we handle all character input here.
-    final char = event.character;
-    if (char != null && char.isNotEmpty) {
-      sendToSession(char);
-    }
+    // Let xterm handle everything else
+    return KeyEventResult.ignored;
   }
 
   @override
   Widget build(BuildContext context) {
-    // If no focus node is attached yet, wrap in GestureDetector to enable onTap activation.
-    if (_effectiveFocusNode == null) {
-      return GestureDetector(
-        onTap: _activateFocus,
-        child: Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerUp: (event) async {
-            // attempt to copy selection to clipboard
-            try {
-              final sel = widget.bridge.getSelectedText();
-              if (sel != null && sel.isNotEmpty) {
-                await Clipboard.setData(ClipboardData(text: sel));
-              }
-            } catch (_) {}
-          },
-          child: TerminalView(
-            widget.bridge.terminal,
-            theme: _terminalTheme,
-            textStyle: _terminalStyle,
-            cursorType: _cursorType,
-            backgroundOpacity: widget.opacity,
-            autofocus: false,
-            padding: const EdgeInsets.all(8),
-          ),
-        ),
-      );
-    }
-
-    // Keep a surrounding Focus to intercept key presses for fallback handling.
-    // IME/composed input is captured by a persistent OverlayEntry TextField.
     return Focus(
-      focusNode: _effectiveFocusNode,
-      onKey: (node, event) {
-        if (event is RawKeyDownEvent) {
-          _handleRawKey(event);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Stack(
-        children: [
-          Listener(
-            behavior: HitTestBehavior.opaque,
-            onPointerUp: (event) async {
-              try {
-                final sel = widget.bridge.getSelectedText();
-                if (sel != null && sel.isNotEmpty) {
-                  await Clipboard.setData(ClipboardData(text: sel));
-                }
-              } catch (_) {}
-            },
-            child: TerminalView(
-              widget.bridge.terminal,
-              theme: _terminalTheme,
-              textStyle: _terminalStyle,
-              cursorType: _cursorType,
-              backgroundOpacity: widget.opacity,
-              autofocus: false,
-              padding: const EdgeInsets.all(8),
-            ),
-          ),
-        ],
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
+      onKeyEvent: _handleKeyEvent,
+      child: TerminalView(
+        widget.bridge.terminal,
+        controller: widget.bridge.terminalController,
+        theme: _terminalTheme,
+        textStyle: _terminalStyle,
+        cursorType: _cursorType,
+        backgroundOpacity: widget.opacity,
+        autofocus: false,
+        padding: const EdgeInsets.all(8),
+        // Enable mouse support for selection and scrolling
+        hardwareKeyboardOnly: true,
       ),
     );
   }
