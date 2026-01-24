@@ -1052,17 +1052,11 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
       );
     }
 
-    // Keep a surrounding Focus to intercept key presses for fallback handling.
-    // IME/composed input is captured by a persistent OverlayEntry TextField.
-    return Focus(
-      focusNode: _effectiveFocusNode,
-      onKey: (node, event) {
-        if (event is RawKeyDownEvent) {
-          _handleRawKey(event);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
+    // Use RawKeyboardListener for keyboard input - this should not block mouse events
+    // unlike Focus widget which can interfere with gesture recognition.
+    return RawKeyboardListener(
+      focusNode: _effectiveFocusNode!,
+      onKey: _handleRawKey,
       child: TerminalView(
         widget.bridge.terminal,
         controller: widget.bridge.controller,
