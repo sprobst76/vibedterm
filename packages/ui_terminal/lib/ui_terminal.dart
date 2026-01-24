@@ -684,7 +684,8 @@ class TerminalBridge {
       : terminal = initialTerminal ??
             Terminal(
               maxLines: 2000,
-            ) {
+            ),
+        controller = TerminalController() {
     terminal.onOutput = (data) {
       onOutput?.call(data);
     };
@@ -692,6 +693,9 @@ class TerminalBridge {
 
   /// The underlying xterm Terminal instance.
   final Terminal terminal;
+
+  /// Controller for terminal view (handles selection, scrolling).
+  final TerminalController controller;
 
   final List<StreamSubscription<List<int>>> _subscriptions = [];
 
@@ -730,52 +734,16 @@ class TerminalBridge {
     terminal.onOutput = null;
   }
 
-  /// Try to read selected text from the underlying xterm Terminal instance.
-  /// Returns null when no selection or not accessible.
+  /// Get selected text from terminal using the controller.
   String? getSelectedText() {
-    try {
-      final t = terminal as dynamic;
-      // common direct properties
-      try {
-        final v = t.selectedText;
-        if (v is String && v.isNotEmpty) return v;
-      } catch (_) {}
-      try {
-        final v = t.selection;
-        if (v is String && v.isNotEmpty) return v;
-        if (v != null) {
-          final s = v.toString();
-          if (s.isNotEmpty) return s;
-        }
-      } catch (_) {}
+    final selection = controller.selection;
+    if (selection == null) return null;
+    return terminal.buffer.getText(selection);
+  }
 
-      // buffer-based accessors
-      try {
-        final buf = t.buffer as dynamic;
-        try {
-          final v = buf.selectedText;
-          if (v is String && v.isNotEmpty) return v;
-        } catch (_) {}
-        try {
-          final v = buf.getSelectedText();
-          if (v is String && v.isNotEmpty) return v;
-        } catch (_) {}
-        try {
-          final v = buf.getSelection();
-          if (v != null) {
-            final s = v.toString();
-            if (s.isNotEmpty) return s;
-          }
-        } catch (_) {}
-      } catch (_) {}
-
-      // last resort: try calling common-named methods on terminal
-      try {
-        final v = t.getSelectedText();
-        if (v is String && v.isNotEmpty) return v;
-      } catch (_) {}
-    } catch (_) {}
-    return null;
+  /// Clear the current selection.
+  void clearSelection() {
+    controller.clearSelection();
   }
 
   void _cancelSubscriptions() {
@@ -1071,26 +1039,15 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
     if (_effectiveFocusNode == null) {
       return GestureDetector(
         onTap: _activateFocus,
-        child: Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerUp: (event) async {
-            // attempt to copy selection to clipboard
-            try {
-              final sel = widget.bridge.getSelectedText();
-              if (sel != null && sel.isNotEmpty) {
-                await Clipboard.setData(ClipboardData(text: sel));
-              }
-            } catch (_) {}
-          },
-          child: TerminalView(
-            widget.bridge.terminal,
-            theme: _terminalTheme,
-            textStyle: _terminalStyle,
-            cursorType: _cursorType,
-            backgroundOpacity: widget.opacity,
-            autofocus: false,
-            padding: const EdgeInsets.all(8),
-          ),
+        child: TerminalView(
+          widget.bridge.terminal,
+          controller: widget.bridge.controller,
+          theme: _terminalTheme,
+          textStyle: _terminalStyle,
+          cursorType: _cursorType,
+          backgroundOpacity: widget.opacity,
+          autofocus: false,
+          padding: const EdgeInsets.all(8),
         ),
       );
     }
@@ -1106,29 +1063,15 @@ class _VibedTerminalViewState extends State<VibedTerminalView> {
         }
         return KeyEventResult.ignored;
       },
-      child: Stack(
-        children: [
-          Listener(
-            behavior: HitTestBehavior.opaque,
-            onPointerUp: (event) async {
-              try {
-                final sel = widget.bridge.getSelectedText();
-                if (sel != null && sel.isNotEmpty) {
-                  await Clipboard.setData(ClipboardData(text: sel));
-                }
-              } catch (_) {}
-            },
-            child: TerminalView(
-              widget.bridge.terminal,
-              theme: _terminalTheme,
-              textStyle: _terminalStyle,
-              cursorType: _cursorType,
-              backgroundOpacity: widget.opacity,
-              autofocus: false,
-              padding: const EdgeInsets.all(8),
-            ),
-          ),
-        ],
+      child: TerminalView(
+        widget.bridge.terminal,
+        controller: widget.bridge.controller,
+        theme: _terminalTheme,
+        textStyle: _terminalStyle,
+        cursorType: _cursorType,
+        backgroundOpacity: widget.opacity,
+        autofocus: false,
+        padding: const EdgeInsets.all(8),
       ),
     );
   }
