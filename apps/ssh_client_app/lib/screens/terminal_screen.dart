@@ -637,8 +637,8 @@ class TerminalPanelState extends State<TerminalPanel>
         await _handleTmuxAutoAttach(tab, host);
       }
 
-      // Delay focus to avoid Windows platform exception
-      Future.delayed(const Duration(milliseconds: 100), () {
+      // Delay focus to avoid Windows platform exception (200ms for slower machines)
+      Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) {
           // ignore: avoid_print
           print('[TAB-DEBUG] requesting tab focus for tab ${tab.id}');
