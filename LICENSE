@@ -1,21 +1,45 @@
-MIT License
+Business Source License 1.1
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative works, and distribute the Work.
+
+Conditions
+
+0.1. Definition of "commercial use"
+
+   A use case falls under commercial use if, as a part of, or as an aid to creating products or services intended for sale or resale, licensing, leasing, subscription fees, usage fees, advertising-based free services, or other means of generating revenue.
+
+0.2. Commercial Use Restriction
+
+   If you are not an individual acting in your personal capacity, and you engage in commercial use, you must obtain a commercial license from the Licensor prior to such use.
+
+1. Grant of Rights
+
+   Subject to the terms and conditions of this License, Licensor grants you a worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute the Work.
+
+2. Conditions
+
+   2.1 If you exercise rights under this License, you must retain all copyright, patent, and trademark notices in the Work.
+
+   2.2 You may not offer the Work for sale or for any form of consideration or compensation without obtaining a written agreement from Licensor.
+
+3. Restrictions
+
+   3.1 You may not sublicense the Work unless expressly authorized by Licensor.
+
+   3.2 Any distribution of the Work must be under the terms of this License and must include a copy of this License with each distribution.
+
+4. Term
+
+   This License is effective as of the date it is first distributed under this License. If Licensor has not provided a "Change Date" in this License, this License will remain in effect until terminated by Licensor.
+
+   If a "Change Date" is provided, this License will automatically convert to the Change License on or after that Change Date. The Change License will apply to all uses of the Work on or after the Change Date.
+
+   If Licensor has not specified a Change License, this License will automatically terminate on the Change Date and you will have no further rights under this License.
+
+Change Date: February 3, 2030
+
+Change License: GNU Affero General Public License v3.0 or later
 
 Copyright (c) 2024-2026 VibedTerm Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
