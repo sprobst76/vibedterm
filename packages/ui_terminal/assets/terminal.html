@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="xterm.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #terminal-container { width: 100%; height: 100%; }
+    /* Hide scrollbar to let Flutter handle chrome */
+    .xterm-viewport::-webkit-scrollbar { display: none; }
+    .xterm-viewport { scrollbar-width: none; }
+  </style>
+</head>
+<body>
+  <div id="terminal-container"></div>
+  <script src="xterm.js"></script>
+  <script src="xterm-addon-fit.js"></script>
+  <script>
+    // --- State ---
+    var term = null;
+    var fitAddon = null;
+
+    // --- Dart communication ---
+    function sendToDart(type, payload) {
+      var msg = JSON.stringify(Object.assign({ type: type }, payload || {}));
+      if (window.flutter_inappwebview) {
+        window.flutter_inappwebview.callHandler('dartChannel', msg);
+      }
+    }
+
+    // Called from Dart via evaluateJavascript
+    function handleDartMessage(jsonStr) {
+      var msg = JSON.parse(jsonStr);
+      switch (msg.type) {
+        case 'write':
+          if (term) term.write(msg.data);
+          break;
+        case 'setTheme':
+          if (term) {
+            term.options.theme = msg.theme;
+          }
+          break;
+        case 'setFontSize':
+          if (term) {
+            term.options.fontSize = msg.fontSize;
+            fitAddon.fit();
+          }
+          break;
+        case 'setFontFamily':
+          if (term) {
+            term.options.fontFamily = msg.fontFamily;
+            fitAddon.fit();
+          }
+          break;
+        case 'setCursorStyle':
+          if (term) {
+            term.options.cursorStyle = msg.style;
+          }
+          break;
+        case 'setOpacity':
+          document.body.style.opacity = msg.opacity;
+          break;
+        case 'fit':
+          if (fitAddon) fitAddon.fit();
+          break;
+        case 'clear':
+          if (term) term.clear();
+          break;
+        case 'reset':
+          if (term) term.reset();
+          break;
+        case 'getSelection':
+          var sel = term ? term.getSelection() : '';
+          sendToDart('selection', { text: sel });
+          break;
+        case 'clearSelection':
+          if (term) term.clearSelection();
+          break;
+        case 'getDimensions':
+          if (term) {
+            sendToDart('dimensions', { cols: term.cols, rows: term.rows });
+          }
+          break;
+        case 'focus':
+          if (term) term.focus();
+          break;
+        case 'blur':
+          if (term) term.blur();
+          break;
+        case 'scrollToBottom':
+          if (term) term.scrollToBottom();
+          break;
+        case 'dispose':
+          if (term) term.dispose();
+          break;
+      }
+    }
+
+    // --- Initialization ---
+    function init() {
+      term = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontFamily: 'monospace',
+        fontSize: 14,
+        scrollback: 2000,
+        allowProposedApi: true,
+      });
+
+      fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+
+      term.open(document.getElementById('terminal-container'));
+      fitAddon.fit();
+
+      // User input -> Dart
+      term.onData(function(data) {
+        sendToDart('input', { data: data });
+      });
+
+      // Resize -> Dart (triggered by FitAddon)
+      term.onResize(function(evt) {
+        sendToDart('resize', { cols: evt.cols, rows: evt.rows });
+      });
+
+      // Window/container resize -> refit
+      var resizeObserver = new ResizeObserver(function() {
+        fitAddon.fit();
+      });
+      resizeObserver.observe(document.getElementById('terminal-container'));
+
+      // Notify Dart that xterm.js is ready
+      sendToDart('ready', { cols: term.cols, rows: term.rows });
+    }
+
+    init();
+  </script>
+</body>
+</html>

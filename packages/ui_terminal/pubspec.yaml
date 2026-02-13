@@ -1,6 +1,6 @@
 name: ui_terminal
 description: Terminal widget integration for VibedTerm.
-version: 0.1.0
+version: 0.2.0
 publish_to: none
 
 environment:
@@ -11,8 +11,16 @@ dependencies:
   flutter:
     sdk: flutter
   xterm: ^4.0.0
+  flutter_inappwebview: ^6.0.0
 
 dev_dependencies:
   flutter_lints: ^3.0.1
   flutter_test:
     sdk: flutter
+
+flutter:
+  assets:
+    - assets/terminal.html
+    - assets/xterm.js
+    - assets/xterm.css
+    - assets/xterm-addon-fit.js

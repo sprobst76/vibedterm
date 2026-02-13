@@ -42,7 +42,7 @@ GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and a
 - **packages/core_vault** - Encrypted vault format, cryptography, and data models (pure Dart, no Flutter)
 - **packages/core_ssh** - SSH session management wrapping dartssh2 (pure Dart)
 - **packages/core_sync** - Sync abstraction for file-based cloud sync (planned)
-- **packages/ui_terminal** - Terminal widget integration using xterm package
+- **packages/ui_terminal** - Terminal widget (xterm.js via WebView on Win/Android/iOS, native xterm Dart on Linux)
 
 ### Key Architectural Patterns
 
@@ -61,28 +61,16 @@ GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and a
 - `SshShellSession` provides streams (stdout/stderr) and write/resize/close methods
 - Key parsing with error handling: logs failures, continues with password auth
 
-**Terminal Integration (ui_terminal)** *(migration planned — see below)*
-- `TerminalBridge` connects SSH streams to xterm `Terminal` instance
-- `VibedTerminalView` widget wraps xterm's `TerminalView`
-- `autofocus` disabled by default to avoid Windows platform issues
-
-> **Planned Migration: xterm (Dart) → xterm.js via WebView**
->
-> The Dart `xterm` package causes persistent platform issues (Windows PlatformExceptions,
-> FocusNode/TextEditingController disposal errors, keyboard handling quirks). These stem
-> from xterm's interaction with Flutter's TextInputClient and are unlikely to be fixed upstream.
->
-> **Decision:** Replace the Dart xterm widget with a WebView embedding xterm.js.
->
-> - xterm.js is battle-tested (used by VS Code, Hyper, Tabby)
-> - WebView available on all targets: Android, iOS, Windows, Linux, macOS
-> - Communication via JavaScript Channels (Flutter ↔ xterm.js)
-> - Only `ui_terminal` package changes; `core_ssh`, `core_vault`, app UI stay untouched
-> - Data flow becomes: SSH stdout → Dart → JS Channel → xterm.js (render)
->   and: xterm.js (input) → JS Channel → Dart → SSH stdin
->
-> Scope of change: `packages/ui_terminal` only. The `TerminalBridge` interface
-> is adapted to communicate over JS channels instead of directly with a Dart Terminal object.
+**Terminal Integration (ui_terminal)**
+- Dual-backend architecture: xterm.js via WebView (Windows, Android, iOS, macOS) / native xterm Dart (Linux)
+- `TerminalBridge` abstracts the backend — communicates via JS channels (WebView) or directly (native)
+- `VibedTerminalView` is a platform-adaptive factory widget selecting the correct backend
+- `VibedTerminalTheme` (own type, typedef'd as `TerminalTheme`) with `toXtermJsTheme()` serialization
+- `TerminalThemePresets` provides 12 color themes, `TerminalThemeConverter` generates Flutter ThemeData
+- WebView loads bundled xterm.js v6 + FitAddon from package assets (no CDN dependency)
+- Bridge features: `ready` future, `viewWidth`/`viewHeight`, `onResize` callback, pending write buffer
+- Data flow (WebView): SSH stdout → Dart → JS Channel → xterm.js | xterm.js input → JS Channel → Dart → SSH stdin
+- Data flow (Linux): SSH stdout → Dart → xterm Terminal.write() | Terminal.onOutput → Dart → SSH stdin
 
 **App Structure (ssh_client_app)**
 - `lib/main.dart` - App shell with vertical sidebar, settings dialog, and `HomeShell` widget
@@ -119,16 +107,18 @@ GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and a
 2. Hosts and identities stored in `VaultData`, encrypted on disk
 3. User selects host → password dialog shown → new `_ConnectionTab` created
 4. Tab connects with key auth (if identity linked) and/or password auth
-5. Tab auto-opens shell, attaches to `TerminalBridge`
-6. Terminal output flows: SSH stdout/stderr -> TerminalBridge -> xterm Terminal
-7. User input flows: xterm onOutput -> TerminalBridge.onOutput -> SSH stdin
+5. Tab auto-opens shell after `await bridge.ready`, attaches to `TerminalBridge`
+6. Terminal output flows: SSH stdout/stderr -> TerminalBridge -> JS Channel -> xterm.js (or native Terminal)
+7. User input flows: xterm.js onData -> JS Channel -> TerminalBridge.onOutput -> SSH stdin
 8. Closing tab disconnects that connection (independent of other tabs)
 
 ### Dependencies
 
 - **cryptography** - KDF and AEAD encryption in core_vault
 - **dartssh2** - SSH2 protocol implementation in core_ssh
-- **xterm** - Terminal emulation widget in ui_terminal
+- **xterm** - Terminal emulation (native Dart, Linux fallback) in ui_terminal
+- **xterm.js** - Terminal emulation (bundled JS, via WebView) in ui_terminal
+- **flutter_inappwebview** - WebView for xterm.js on Windows, Android, iOS, macOS
 - **flutter_secure_storage** - Device keychain for remembered passwords
 - **shared_preferences** - Last vault path persistence
 
@@ -156,30 +146,13 @@ GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and a
 
 **Solution:** Import the correct key (from `~/.ssh/id_*`) into the vault identity.
 
-### Windows Platform Exceptions
+### Windows/Android Platform Issues (RESOLVED)
 
-**Symptoms:** Console shows errors like:
-```
-PlatformException(Bad Arguments, Could not set client, view ID is null., null, null)
-PlatformException(Internal Consistency Error, Set editing state has been invoked, but no client is set., null, null)
-```
+**Previous issues** with the Dart xterm package (PlatformExceptions, FocusNode disposal errors)
+have been resolved by migrating to xterm.js via WebView on non-Linux platforms. The WebView
+handles its own text input and focus management, bypassing Flutter's TextInputClient entirely.
 
-**Cause:** Known issue with xterm package and Flutter text input on Windows.
-
-**Mitigations applied:**
-- Disabled `autofocus` on `VibedTerminalView`
-- Added 100ms delay before `focusNode.requestFocus()` after tab creation
-- Removed manual FocusNode management (rely on Flutter's built-in autofocus)
-
-**Status:** Errors still appear but don't block functionality. May need upstream fix in xterm package.
-
-### TextEditingController/FocusNode Disposal Errors
-
-**Symptoms:** "A TextEditingController was used after being disposed" or "A FocusNode was used after being disposed"
-
-**Cause:** Disposing controllers/focus nodes while dialog animations are still running.
-
-**Solution:** Don't manually dispose in dialog functions - let garbage collection handle it. Dialog animations may still reference these objects after `showDialog` returns.
+The native Dart xterm fallback is retained for Linux only, where these issues do not occur.
 
 ## Code Conventions
 
@@ -197,7 +170,10 @@ When navigating this codebase, these are the most important files:
 - `melos.yaml` - Monorepo configuration and scripts
 - `packages/core_vault/lib/core_vault.dart` - Vault implementation with all data models
 - `packages/core_ssh/lib/core_ssh.dart` - SSH connection manager with tmux support
-- `packages/ui_terminal/lib/ui_terminal.dart` - Terminal bridge and theme converter
+- `packages/ui_terminal/lib/ui_terminal.dart` - Barrel exports and platform-adaptive VibedTerminalView
+- `packages/ui_terminal/lib/src/terminal_bridge.dart` - Dual-mode bridge (WebView JS channels / native xterm)
+- `packages/ui_terminal/lib/src/webview_terminal_view.dart` - xterm.js WebView widget
+- `packages/ui_terminal/assets/terminal.html` - xterm.js HTML shell with JS channel protocol
 - `apps/ssh_client_app/lib/main.dart` - App shell, sidebar, settings dialog
 - `apps/ssh_client_app/lib/screens/terminal_screen.dart` - Multi-tab terminal with tmux integration
 - `apps/ssh_client_app/lib/services/vault_service.dart` - State orchestration

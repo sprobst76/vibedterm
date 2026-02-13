@@ -1343,20 +1343,20 @@ class _ConnectionTab {
   Future<void> _startShell() async {
     if (session != null) return;
 
-    bridge.terminal.buffer.clear();
-    bridge.terminal.buffer.setCursor(0, 0);
+    await bridge.ready;
+    bridge.resetTerminal();
 
     final newSession = await manager.startShell(
       ptyConfig: SshPtyConfig(
-        width: bridge.terminal.viewWidth,
-        height: bridge.terminal.viewHeight,
+        width: bridge.viewWidth,
+        height: bridge.viewHeight,
       ),
     );
 
     session = newSession;
     bridge.attachStreams(stdout: newSession.stdout, stderr: newSession.stderr);
     bridge.onOutput = (data) => newSession.writeString(data);
-    bridge.terminal.onResize = (w, h, pw, ph) => newSession.resize(w, h);
+    bridge.onResize = (cols, rows) => newSession.resize(cols, rows);
 
     _addLog('Shell opened');
     _reconnectAttempts = 0; // Reset on successful connection
@@ -1556,7 +1556,7 @@ class _ConnectionTab {
     unawaited(_statusSub?.cancel());
     unawaited(_logSub?.cancel());
     bridge.onOutput = null;
-    bridge.terminal.onResize = null;
+    bridge.onResize = null;
     unawaited(session?.close());
     unawaited(manager.disconnect());
     manager.dispose();
