@@ -61,10 +61,28 @@ GitHub Actions workflow (`.github/workflows/ci.yaml`) runs on push to main and a
 - `SshShellSession` provides streams (stdout/stderr) and write/resize/close methods
 - Key parsing with error handling: logs failures, continues with password auth
 
-**Terminal Integration (ui_terminal)**
+**Terminal Integration (ui_terminal)** *(migration planned — see below)*
 - `TerminalBridge` connects SSH streams to xterm `Terminal` instance
 - `VibedTerminalView` widget wraps xterm's `TerminalView`
 - `autofocus` disabled by default to avoid Windows platform issues
+
+> **Planned Migration: xterm (Dart) → xterm.js via WebView**
+>
+> The Dart `xterm` package causes persistent platform issues (Windows PlatformExceptions,
+> FocusNode/TextEditingController disposal errors, keyboard handling quirks). These stem
+> from xterm's interaction with Flutter's TextInputClient and are unlikely to be fixed upstream.
+>
+> **Decision:** Replace the Dart xterm widget with a WebView embedding xterm.js.
+>
+> - xterm.js is battle-tested (used by VS Code, Hyper, Tabby)
+> - WebView available on all targets: Android, iOS, Windows, Linux, macOS
+> - Communication via JavaScript Channels (Flutter ↔ xterm.js)
+> - Only `ui_terminal` package changes; `core_ssh`, `core_vault`, app UI stay untouched
+> - Data flow becomes: SSH stdout → Dart → JS Channel → xterm.js (render)
+>   and: xterm.js (input) → JS Channel → Dart → SSH stdin
+>
+> Scope of change: `packages/ui_terminal` only. The `TerminalBridge` interface
+> is adapted to communicate over JS channels instead of directly with a Dart Terminal object.
 
 **App Structure (ssh_client_app)**
 - `lib/main.dart` - App shell with vertical sidebar, settings dialog, and `HomeShell` widget
