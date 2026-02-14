@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_client_app/screens/terminal_screen.dart';
+import 'package:ssh_client_app/screens/terminal/terminal_screen.dart';
 
 import '../mocks/test_vault_service.dart';
 
@@ -99,10 +99,11 @@ void main() {
       await service.createDemoVault();
       await tester.pumpWidget(buildTestWidget());
 
-      expect(find.text('Esc'), findsOneWidget);
-      expect(find.text('Ctrl+C'), findsOneWidget);
-      expect(find.text('Ctrl+D'), findsOneWidget);
-      expect(find.text('Tab'), findsOneWidget);
+      // Keys appear in both status bar and mobile extra-key row (2x each)
+      expect(find.text('Esc'), findsNWidgets(2));
+      expect(find.text('Ctrl+C'), findsNWidgets(2));
+      expect(find.text('Ctrl+D'), findsNWidgets(2));
+      expect(find.text('Tab'), findsNWidgets(2));
     });
 
     testWidgets('status bar shows paste button', (tester) async {
@@ -125,11 +126,11 @@ void main() {
       await service.createDemoVault();
       await tester.pumpWidget(buildTestWidget());
 
-      // Find the Esc button and check it's disabled
-      final escButton = find.widgetWithText(TextButton, 'Esc');
-      expect(escButton, findsOneWidget);
+      // Esc button appears 2x (status bar + mobile extra-key row), both disabled
+      final escButtons = find.widgetWithText(TextButton, 'Esc');
+      expect(escButtons, findsNWidgets(2));
 
-      final button = tester.widget<TextButton>(escButton);
+      final button = tester.widget<TextButton>(escButtons.first);
       expect(button.onPressed, isNull);
     });
 
