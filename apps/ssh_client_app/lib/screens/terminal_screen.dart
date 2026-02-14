@@ -77,17 +77,94 @@ class TerminalPanelState extends State<TerminalPanel>
   Widget build(BuildContext context) {
     final termTheme = _currentTerminalTheme;
 
-    return Container(
-      color: termTheme.background,
-      child: Column(
-        children: [
-          _buildTabBar(termTheme),
-          Expanded(child: _buildTerminalArea(termTheme)),
-          _buildStatusBar(termTheme),
-          if (_showLogs) _buildLogsDrawer(termTheme),
-        ],
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Container(
+        color: termTheme.background,
+        child: Column(
+          children: [
+            _buildTabBar(termTheme),
+            Expanded(child: _buildTerminalArea(termTheme)),
+            _buildStatusBar(termTheme),
+            if (_showLogs) _buildLogsDrawer(termTheme),
+          ],
+        ),
       ),
     );
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final ctrl = HardwareKeyboard.instance.isControlPressed;
+    if (!ctrl) return KeyEventResult.ignored;
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+
+    // Ctrl+Tab / Ctrl+Shift+Tab — cycle tabs
+    if (event.logicalKey == LogicalKeyboardKey.tab) {
+      if (shift) {
+        _switchToPreviousTab();
+      } else {
+        _switchToNextTab();
+      }
+      return KeyEventResult.handled;
+    }
+
+    // Ctrl+1..9 — jump to tab by index
+    final digitIndex = _digitKeyIndex(event.logicalKey);
+    if (digitIndex != null) {
+      _switchToTab(digitIndex);
+      return KeyEventResult.handled;
+    }
+
+    // Ctrl+T — new connection
+    if (event.logicalKey == LogicalKeyboardKey.keyT && !shift) {
+      _showHostPicker();
+      return KeyEventResult.handled;
+    }
+
+    // Ctrl+W — close current tab
+    if (event.logicalKey == LogicalKeyboardKey.keyW && !shift) {
+      final tab = _activeTab;
+      if (tab != null) _confirmCloseTab(tab);
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _switchToNextTab() {
+    if (_tabController == null || _tabs.length < 2) return;
+    _tabController!.animateTo((_tabController!.index + 1) % _tabs.length);
+  }
+
+  void _switchToPreviousTab() {
+    if (_tabController == null || _tabs.length < 2) return;
+    _tabController!.animateTo(
+      (_tabController!.index - 1 + _tabs.length) % _tabs.length,
+    );
+  }
+
+  void _switchToTab(int index) {
+    if (_tabController == null || index >= _tabs.length) return;
+    _tabController!.animateTo(index);
+  }
+
+  /// Returns 0-based tab index for Ctrl+1..9 keys, or null if not a digit key.
+  int? _digitKeyIndex(LogicalKeyboardKey key) {
+    const digitKeys = [
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+      LogicalKeyboardKey.digit7,
+      LogicalKeyboardKey.digit8,
+      LogicalKeyboardKey.digit9,
+    ];
+    final idx = digitKeys.indexOf(key);
+    return idx >= 0 ? idx : null;
   }
 
   Widget _buildTabBar(TerminalTheme termTheme) {
