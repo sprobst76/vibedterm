@@ -45,9 +45,12 @@ See [Security Architecture](docs/security_architecture.md) for detailed cryptogr
 
 ### Terminal
 - **Multi-Tab Sessions**: Terminus-like UX with independent SSH connections per tab
+- **Keyboard Shortcuts**: Ctrl+Tab to cycle tabs, Ctrl+1-9 for direct access, Ctrl+T/W to open/close
 - **12 Color Themes**: Dark and light themes including Dracula, Monokai, Solarized, Nord, Gruvbox, One Dark/Light, GitHub Light
 - **App-Wide Theming**: Terminal theme colors apply to the entire application
 - **Customizable**: Font size, font family, cursor style, background opacity
+- **Command Snippets**: Save and quickly send frequently used commands to terminal sessions
+- **Mobile Extra Keys**: Scrollable row with arrows, Ctrl combos, and special characters on Android/iOS
 
 ### tmux Integration
 - **Auto-Attach**: Automatically attach to or create tmux sessions on connect
@@ -64,7 +67,7 @@ See [Security Architecture](docs/security_architecture.md) for detailed cryptogr
 ### UI/UX
 - **Compact Sidebar**: Vertical navigation with rotated branding
 - **Quick Connect**: Fast host selection via picker or ActionChip shortcuts
-- **Status Bar**: Connection info, special keys (Esc, Ctrl+C/D, Tab), paste, tmux manager
+- **Status Bar**: Connection info, special keys, paste, snippets, tmux manager
 - **Per-Tab Logs**: Collapsible drawer showing connection logs
 
 ## Screenshots
@@ -196,10 +199,11 @@ Contributions are welcome! Please read the existing code style and follow the pa
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Business Source License 1.1 - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
 - [dartssh2](https://pub.dev/packages/dartssh2) - SSH2 protocol implementation
-- [xterm](https://pub.dev/packages/xterm) - Terminal emulation widget
+- [xterm.js](https://xtermjs.org/) - Terminal emulation (WebView, Windows/Android/macOS)
+- [xterm](https://pub.dev/packages/xterm) - Terminal emulation (native Dart, Linux)
 - [cryptography](https://pub.dev/packages/cryptography) - Cryptographic primitives

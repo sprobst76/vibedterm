@@ -2,6 +2,10 @@
 
 ## Recently Completed
 
+- [x] Keyboard shortcuts: Ctrl+Tab/Shift+Tab for tab cycling, Ctrl+1-9 direct access, Ctrl+T new connection, Ctrl+W close tab
+- [x] Snippets UI: Full CRUD in Hosts screen, snippet picker in terminal status bar
+- [x] Android extra-key row: Scrollable bar with arrows, Ctrl combos, navigation, special characters
+- [x] Fix all 36 analyzer warnings (deprecated APIs, unused imports, dead code)
 - [x] Terminal theme customization (12 themes)
 - [x] App-wide theming based on terminal theme
 - [x] tmux auto-attach on connection
@@ -27,12 +31,9 @@
 ### High Priority
 
 - [ ] **tmux session list auto-refresh**: Parse terminal output for session list
-- [ ] **Keyboard shortcuts**: Ctrl+Tab for tab switching, Ctrl+1-9 for direct access
 
 ### Medium Priority
 
-- [ ] **Snippets UI**: Manage `VaultSnippet` entries (model exists, no UI)
-- [ ] **Android extra-key row**: Special keys in terminal status bar for mobile
 - [ ] **Session recording**: Record and playback terminal sessions
 - [ ] **SFTP file browser**: Browse and transfer files via SFTP
 - [ ] **Search in terminal**: Find text in terminal output

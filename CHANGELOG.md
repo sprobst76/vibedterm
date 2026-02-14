@@ -2,6 +2,34 @@
 
 All notable changes to VibedTerm will be documented in this file.
 
+## [0.3.0] - 2026-02-14
+
+### Added
+
+#### Keyboard Shortcuts
+- **Tab navigation**: Ctrl+Tab / Ctrl+Shift+Tab to cycle through tabs
+- **Direct tab access**: Ctrl+1 through Ctrl+9 to jump to specific tabs
+- **New connection**: Ctrl+T to open the host picker
+- **Close tab**: Ctrl+W to close the current tab (with confirmation for active connections)
+
+#### Snippets
+- **Snippet management**: Full CRUD for command snippets in the Hosts screen (title, content, tags)
+- **Snippet picker**: Send snippets directly to active terminal sessions via status bar button
+- **Vault integration**: Snippets stored encrypted in the vault alongside hosts and identities
+
+#### Mobile Terminal
+- **Extra-key row**: Scrollable bar with 22 keys for Android/iOS (arrows, Ctrl combos, navigation, special characters)
+- **Platform-adaptive**: Only shown on mobile devices, hidden on desktop
+
+#### Terminal Rendering
+- **xterm.js migration**: Replaced native Dart xterm with xterm.js via WebView on Windows, Android, and macOS
+- **Native fallback**: Retained native Dart xterm for Linux where it works best
+
+### Fixed
+- Resolved all 36 analyzer warnings (deprecated APIs, unused imports, dead code)
+
+---
+
 ## [0.2.0] - 2026-01-17
 
 ### Added
