@@ -86,6 +86,7 @@ class TerminalPanelState extends State<TerminalPanel>
           children: [
             _buildTabBar(termTheme),
             Expanded(child: _buildTerminalArea(termTheme)),
+            if (_isMobilePlatform(context)) _buildExtraKeyRow(termTheme),
             _buildStatusBar(termTheme),
             if (_showLogs) _buildLogsDrawer(termTheme),
           ],
@@ -552,6 +553,67 @@ class TerminalPanelState extends State<TerminalPanel>
             visualDensity: VisualDensity.compact,
           ),
         ],
+      ),
+    );
+  }
+
+  bool _isMobilePlatform(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  }
+
+  Widget _buildExtraKeyRow(TerminalTheme termTheme) {
+    final hasSession = _activeTab?.session != null;
+    final barColor = Color.lerp(termTheme.background, Colors.black, 0.1)!;
+    final textColor = termTheme.foreground;
+
+    VoidCallback? key(String data) =>
+        hasSession ? () => _sendKey(data) : null;
+
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: barColor,
+        border: Border(
+          top: BorderSide(
+            color: termTheme.foreground.withValues(alpha: 0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
+            // Common control keys
+            _KeyButton(label: 'Esc', textColor: textColor, onPressed: key('\x1b')),
+            _KeyButton(label: 'Tab', textColor: textColor, onPressed: key('\t')),
+            _KeyButton(label: 'Ctrl+C', textColor: textColor, onPressed: key('\x03')),
+            _KeyButton(label: 'Ctrl+D', textColor: textColor, onPressed: key('\x04')),
+            _KeyButton(label: 'Ctrl+Z', textColor: textColor, onPressed: key('\x1a')),
+            _KeyButton(label: 'Ctrl+L', textColor: textColor, onPressed: key('\x0c')),
+            _KeyButton(label: 'Ctrl+A', textColor: textColor, onPressed: key('\x01')),
+            _KeyButton(label: 'Ctrl+R', textColor: textColor, onPressed: key('\x12')),
+            // Arrow keys
+            _KeyButton(label: '\u2191', textColor: textColor, onPressed: key('\x1b[A')),
+            _KeyButton(label: '\u2193', textColor: textColor, onPressed: key('\x1b[B')),
+            _KeyButton(label: '\u2190', textColor: textColor, onPressed: key('\x1b[D')),
+            _KeyButton(label: '\u2192', textColor: textColor, onPressed: key('\x1b[C')),
+            // Navigation
+            _KeyButton(label: 'Home', textColor: textColor, onPressed: key('\x1b[H')),
+            _KeyButton(label: 'End', textColor: textColor, onPressed: key('\x1b[F')),
+            _KeyButton(label: 'PgUp', textColor: textColor, onPressed: key('\x1b[5~')),
+            _KeyButton(label: 'PgDn', textColor: textColor, onPressed: key('\x1b[6~')),
+            // Special characters hard to type on mobile
+            _KeyButton(label: '|', textColor: textColor, onPressed: key('|')),
+            _KeyButton(label: '~', textColor: textColor, onPressed: key('~')),
+            _KeyButton(label: '`', textColor: textColor, onPressed: key('`')),
+            _KeyButton(label: r'\', textColor: textColor, onPressed: key(r'\')),
+            _KeyButton(label: '/', textColor: textColor, onPressed: key('/')),
+            _KeyButton(label: '-', textColor: textColor, onPressed: key('-')),
+          ],
+        ),
       ),
     );
   }
