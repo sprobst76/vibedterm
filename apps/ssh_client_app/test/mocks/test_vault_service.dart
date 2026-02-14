@@ -314,6 +314,74 @@ class TestVaultService implements VaultServiceInterface {
   }
 
   @override
+  Future<void> addSnippet({
+    required String title,
+    required String content,
+    List<String> tags = const [],
+  }) async {
+    if (_currentData == null) {
+      state.value = state.value.copyWith(
+        status: VaultStatus.error,
+        message: 'Unlock a vault first.',
+      );
+      return;
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    final snippet = VaultSnippet(
+      id: 'snip-${_currentData!.snippets.length + 1}',
+      title: title,
+      content: content,
+      tags: tags,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _currentData = _currentData!.copyWith(
+      snippets: [..._currentData!.snippets, snippet],
+      revision: _currentData!.revision + 1,
+      updatedAt: now,
+    );
+    state.value = state.value.copyWith(
+      status: VaultStatus.unlocked,
+      message: 'Snippet added.',
+    );
+  }
+
+  @override
+  Future<void> updateSnippet(VaultSnippet updated) async {
+    if (_currentData == null) return;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final snippets = _currentData!.snippets
+        .map((s) => s.id == updated.id ? updated : s)
+        .toList();
+    _currentData = _currentData!.copyWith(
+      snippets: snippets,
+      revision: _currentData!.revision + 1,
+      updatedAt: now,
+    );
+    state.value = state.value.copyWith(
+      status: VaultStatus.unlocked,
+      message: 'Snippet updated.',
+    );
+  }
+
+  @override
+  Future<void> deleteSnippet(String snippetId) async {
+    if (_currentData == null) return;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final snippets =
+        _currentData!.snippets.where((s) => s.id != snippetId).toList();
+    _currentData = _currentData!.copyWith(
+      snippets: snippets,
+      revision: _currentData!.revision + 1,
+      updatedAt: now,
+    );
+    state.value = state.value.copyWith(
+      status: VaultStatus.unlocked,
+      message: 'Snippet deleted.',
+    );
+  }
+
+  @override
   Future<void> updateSettings(VaultSettings settings) async {
     if (_currentData == null) return;
     final now = DateTime.now().toUtc().toIso8601String();

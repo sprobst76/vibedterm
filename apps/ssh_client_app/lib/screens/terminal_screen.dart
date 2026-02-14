@@ -530,6 +530,12 @@ class TerminalPanelState extends State<TerminalPanel>
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
+            icon: Icon(Icons.code, size: 18, color: iconColor),
+            tooltip: 'Snippets',
+            onPressed: hasSession ? _showSnippetPicker : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          IconButton(
             icon: Icon(Icons.grid_view, size: 18, color: iconColor),
             tooltip: 'tmux sessions',
             onPressed: hasSession ? () => _showTmuxManager(tab!) : null,
@@ -845,6 +851,48 @@ class TerminalPanelState extends State<TerminalPanel>
     final text = data?.text;
     if (text == null || text.isEmpty) return;
     await tab!.session!.writeString(text);
+  }
+
+  Future<void> _showSnippetPicker() async {
+    final snippets = widget.service.currentData?.snippets ?? [];
+    if (snippets.isEmpty) {
+      _showMessage('No snippets. Add snippets in the Hosts screen.');
+      return;
+    }
+
+    final selected = await showDialog<VaultSnippet>(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('Send snippet'),
+          children: snippets.map((snippet) {
+            return SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, snippet),
+              child: ListTile(
+                leading: const Icon(Icons.code, size: 20),
+                title: Text(snippet.title),
+                subtitle: Text(
+                  snippet.content,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  ),
+                ),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+
+    if (selected == null) return;
+    final tab = _activeTab;
+    if (tab?.session == null) return;
+    await tab!.session!.writeString(selected.content);
   }
 
   void _showMessage(String text) {

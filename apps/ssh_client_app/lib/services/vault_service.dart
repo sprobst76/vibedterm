@@ -426,6 +426,72 @@ class VaultService implements VaultServiceInterface {
   }
 
   @override
+  Future<void> addSnippet({
+    required String title,
+    required String content,
+    List<String> tags = const [],
+  }) async {
+    if (_current == null) {
+      state.value = state.value.copyWith(
+        status: VaultStatus.error,
+        message: 'Unlock a vault first.',
+      );
+      return;
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    final snippet = VaultSnippet(
+      id: _uuid.v4(),
+      title: title,
+      content: content,
+      tags: tags,
+      createdAt: now,
+      updatedAt: now,
+    );
+    try {
+      _current!.upsertSnippet(snippet);
+      await _current!.save();
+      state.value = state.value.copyWith(
+        status: VaultStatus.unlocked,
+        message: 'Snippet added.',
+      );
+    } on VaultException catch (e) {
+      state.value = state.value.copyWith(
+        status: VaultStatus.error,
+        message: e.message,
+      );
+    }
+  }
+
+  @override
+  Future<void> updateSnippet(VaultSnippet updated) async {
+    if (_current == null) return;
+    try {
+      _current!.upsertSnippet(updated);
+      await _current!.save();
+      state.value = state.value.copyWith(
+        status: VaultStatus.unlocked,
+        message: 'Snippet updated.',
+      );
+    } on VaultException catch (e) {
+      state.value = state.value.copyWith(
+        status: VaultStatus.error,
+        message: e.message,
+      );
+    }
+  }
+
+  @override
+  Future<void> deleteSnippet(String snippetId) async {
+    if (_current == null) return;
+    _current!.removeSnippet(snippetId);
+    await _current!.save();
+    state.value = state.value.copyWith(
+      status: VaultStatus.unlocked,
+      message: 'Snippet deleted.',
+    );
+  }
+
+  @override
   Future<void> updateSettings(VaultSettings settings) async {
     if (_current == null) {
       state.value = state.value.copyWith(

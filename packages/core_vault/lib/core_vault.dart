@@ -385,6 +385,24 @@ class VaultSnippet {
       updatedAt: json['updatedAt'] as String?,
     );
   }
+
+  VaultSnippet copyWith({
+    String? id,
+    String? title,
+    String? content,
+    List<String>? tags,
+    String? createdAt,
+    String? updatedAt,
+  }) {
+    return VaultSnippet(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      content: content ?? this.content,
+      tags: tags ?? this.tags,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }
 
 /// User preferences and settings stored in the vault.
@@ -1135,6 +1153,38 @@ class VaultFile {
     _setData(current.copyWith(
       identities: identities,
       hosts: hosts,
+      revision: current.revision + 1,
+      updatedAt: _nowIso(),
+    ));
+  }
+
+  /// Upsert a snippet and bump revision/updatedAt.
+  void upsertSnippet(VaultSnippet snippet) {
+    final current = _payload.data;
+    _validateSnippet(snippet);
+    final snippets = [...current.snippets];
+    final idx = snippets.indexWhere((s) => s.id == snippet.id);
+    if (idx >= 0) {
+      snippets[idx] = snippet;
+    } else {
+      snippets.add(snippet);
+    }
+    _setData(current.copyWith(
+      snippets: snippets,
+      revision: current.revision + 1,
+      updatedAt: _nowIso(),
+    ));
+  }
+
+  /// Remove a snippet by id and bump revision if found.
+  void removeSnippet(String snippetId) {
+    final current = _payload.data;
+    final snippets = current.snippets.where((s) => s.id != snippetId).toList();
+    if (snippets.length == current.snippets.length) {
+      return;
+    }
+    _setData(current.copyWith(
+      snippets: snippets,
       revision: current.revision + 1,
       updatedAt: _nowIso(),
     ));

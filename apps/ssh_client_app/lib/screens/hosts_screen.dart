@@ -58,6 +58,11 @@ class HostsScreen extends StatelessWidget {
                   icon: const Icon(Icons.add),
                   label: const Text('Add host'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: () => _promptAddSnippet(context),
+                  icon: const Icon(Icons.code),
+                  label: const Text('Add snippet'),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -164,10 +169,171 @@ class HostsScreen extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            Text(
+              'Snippets (${data.snippets.length})',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            if (data.snippets.isEmpty)
+              Card(
+                child: ListTile(
+                  leading: Icon(Icons.info_outline,
+                      color: Theme.of(context).colorScheme.outline),
+                  title: const Text('No snippets yet'),
+                  subtitle: const Text(
+                      'Add command snippets for quick insertion into terminal sessions.'),
+                ),
+              )
+            else
+              ...data.snippets.map(
+                (snippet) => Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.code),
+                    title: Text(snippet.title),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          snippet.content,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (snippet.tags.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Wrap(
+                              spacing: 4,
+                              children: snippet.tags
+                                  .map((tag) => Chip(
+                                        label: Text(tag),
+                                        labelStyle:
+                                            const TextStyle(fontSize: 10),
+                                        visualDensity: VisualDensity.compact,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        padding: EdgeInsets.zero,
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                      ],
+                    ),
+                    isThreeLine: true,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          tooltip: 'Edit snippet',
+                          onPressed: () => _promptAddSnippet(context,
+                              existing: snippet),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          tooltip: 'Delete snippet',
+                          onPressed: () =>
+                              service.deleteSnippet(snippet.id),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _promptAddSnippet(BuildContext context,
+      {VaultSnippet? existing}) async {
+    final titleController =
+        TextEditingController(text: existing?.title ?? '');
+    final contentController =
+        TextEditingController(text: existing?.content ?? '');
+    final tagsController =
+        TextEditingController(text: existing?.tags.join(', ') ?? '');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(existing == null ? 'Add snippet' : 'Edit snippet'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Title'),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: contentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Command / content',
+                    hintText: 'e.g. ls -la ~',
+                  ),
+                  maxLines: 4,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: tagsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tags (comma-separated, optional)',
+                    hintText: 'e.g. linux, disk, monitoring',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+    final title = titleController.text.trim();
+    final content = contentController.text.trim();
+    if (title.isEmpty || content.isEmpty) return;
+    final tags = tagsController.text
+        .split(',')
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    if (existing == null) {
+      await service.addSnippet(
+        title: title,
+        content: content,
+        tags: tags,
+      );
+    } else {
+      await service.updateSnippet(
+        existing.copyWith(
+          title: title,
+          content: content,
+          tags: tags,
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+    }
   }
 
   Future<void> _promptAddHost(BuildContext context,

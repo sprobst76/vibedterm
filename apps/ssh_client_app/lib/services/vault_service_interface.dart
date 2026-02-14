@@ -122,6 +122,14 @@ abstract class VaultServiceInterface {
   Future<void> deleteIdentity(String identityId);
   Future<void> updateSettings(VaultSettings settings);
 
+  Future<void> addSnippet({
+    required String title,
+    required String content,
+    List<String> tags,
+  });
+  Future<void> updateSnippet(VaultSnippet updated);
+  Future<void> deleteSnippet(String snippetId);
+
   void setPendingConnectHost(VaultHost? host, {VaultIdentity? identity});
   void clearPendingConnect();
 
