@@ -104,13 +104,12 @@ class _HomeShellState extends State<HomeShell> {
       if (host == null || host.isEmpty) return;
       final port = (map['port'] as num?)?.toInt() ?? 22;
       final username = map['username'] as String? ?? '';
-      final password = (map['password'] as String?) ?? '';
       final keyfile = (map['privateKeyFile'] as String?) ?? '';
 
       // Build a VaultHost instance (not persisted) and request connection.
       final vh = VaultHost(
         id: 'cfg-default',
-        label: '${username}@${host}',
+        label: '$username@$host',
         hostname: host,
         port: port,
         username: username,
@@ -220,7 +219,7 @@ class _HomeShellState extends State<HomeShell> {
         color: Color.lerp(colorScheme.surface, Colors.black, 0.15),
         border: Border(
           right: BorderSide(
-            color: colorScheme.outline.withOpacity(0.2),
+            color: colorScheme.outline.withValues(alpha: 0.2),
             width: 1,
           ),
         ),
@@ -244,7 +243,7 @@ class _HomeShellState extends State<HomeShell> {
                   height: 56,
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? colorScheme.primary.withOpacity(0.15)
+                        ? colorScheme.primary.withValues(alpha: 0.15)
                         : Colors.transparent,
                     border: Border(
                       left: BorderSide(
@@ -259,7 +258,7 @@ class _HomeShellState extends State<HomeShell> {
                     page.icon,
                     color: isSelected
                         ? colorScheme.primary
-                        : colorScheme.onSurface.withOpacity(0.6),
+                        : colorScheme.onSurface.withValues(alpha: 0.6),
                     size: 24,
                   ),
                 ),
@@ -298,7 +297,7 @@ class _HomeShellState extends State<HomeShell> {
                 height: 48,
                 child: Icon(
                   Icons.settings_outlined,
-                  color: colorScheme.onSurface.withOpacity(0.5),
+                  color: colorScheme.onSurface.withValues(alpha: 0.5),
                   size: 20,
                 ),
               ),
@@ -326,7 +325,7 @@ class _HomeShellState extends State<HomeShell> {
 
         if (!isConfigured) {
           icon = Icons.cloud_off_outlined;
-          color = colorScheme.onSurface.withOpacity(0.3);
+          color = colorScheme.onSurface.withValues(alpha: 0.3);
           tooltip = 'Sync not configured';
         } else if (status.authState == AuthState.pendingApproval) {
           icon = Icons.hourglass_empty;
@@ -334,13 +333,13 @@ class _HomeShellState extends State<HomeShell> {
           tooltip = 'Account pending admin approval';
         } else if (!status.isAuthenticated) {
           icon = Icons.cloud_off_outlined;
-          color = colorScheme.onSurface.withOpacity(0.5);
+          color = colorScheme.onSurface.withValues(alpha: 0.5);
           tooltip = 'Not logged in';
         } else {
           switch (syncState) {
             case SyncState.disconnected:
               icon = Icons.cloud_off_outlined;
-              color = colorScheme.onSurface.withOpacity(0.5);
+              color = colorScheme.onSurface.withValues(alpha: 0.5);
               tooltip = 'Disconnected';
             case SyncState.idle:
               icon = Icons.cloud_outlined;
@@ -688,7 +687,7 @@ class _SettingsDialogState extends State<_SettingsDialog>
           Text('Color Theme', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            value: _terminalTheme,
+            initialValue: _terminalTheme,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

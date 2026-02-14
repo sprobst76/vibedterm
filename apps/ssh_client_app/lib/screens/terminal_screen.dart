@@ -171,7 +171,7 @@ class TerminalPanelState extends State<TerminalPanel>
     // Create a slightly lighter/darker shade for the tab bar
     final tabBarColor = Color.lerp(termTheme.background, termTheme.foreground, 0.08)!;
     final textColor = termTheme.foreground;
-    final iconColor = termTheme.foreground.withOpacity(0.8);
+    final iconColor = termTheme.foreground.withValues(alpha:0.8);
 
     return Container(
       height: 48,
@@ -179,7 +179,7 @@ class TerminalPanelState extends State<TerminalPanel>
         color: tabBarColor,
         border: Border(
           bottom: BorderSide(
-            color: termTheme.foreground.withOpacity(0.1),
+            color: termTheme.foreground.withValues(alpha:0.1),
             width: 1,
           ),
         ),
@@ -192,14 +192,14 @@ class TerminalPanelState extends State<TerminalPanel>
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
                       'No connections',
-                      style: TextStyle(color: textColor.withOpacity(0.6)),
+                      style: TextStyle(color: textColor.withValues(alpha:0.6)),
                     ),
                   )
                 : Theme(
                     data: Theme.of(context).copyWith(
                       tabBarTheme: TabBarThemeData(
                         labelColor: textColor,
-                        unselectedLabelColor: textColor.withOpacity(0.6),
+                        unselectedLabelColor: textColor.withValues(alpha:0.6),
                         indicatorColor: termTheme.cyan,
                         dividerColor: Colors.transparent,
                       ),
@@ -284,7 +284,7 @@ class TerminalPanelState extends State<TerminalPanel>
             onTap: () => _confirmCloseTab(tab),
             child: Padding(
               padding: const EdgeInsets.all(2),
-              child: Icon(Icons.close, size: 16, color: textColor.withOpacity(0.7)),
+              child: Icon(Icons.close, size: 16, color: textColor.withValues(alpha:0.7)),
             ),
           ),
         ],
@@ -304,12 +304,12 @@ class TerminalPanelState extends State<TerminalPanel>
         color: termTheme.background,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: termTheme.foreground.withOpacity(0.15),
+          color: termTheme.foreground.withValues(alpha:0.15),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha:0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -352,7 +352,7 @@ class TerminalPanelState extends State<TerminalPanel>
   Widget _buildEmptyState(TerminalTheme termTheme) {
     final hosts = widget.service.currentData?.hosts ?? [];
     final textColor = termTheme.foreground;
-    final dimColor = termTheme.foreground.withOpacity(0.6);
+    final dimColor = termTheme.foreground.withValues(alpha:0.6);
 
     return Center(
       child: Column(
@@ -361,7 +361,7 @@ class TerminalPanelState extends State<TerminalPanel>
           Icon(
             Icons.terminal,
             size: 64,
-            color: termTheme.cyan.withOpacity(0.7),
+            color: termTheme.cyan.withValues(alpha:0.7),
           ),
           const SizedBox(height: 16),
           Text(
@@ -388,7 +388,7 @@ class TerminalPanelState extends State<TerminalPanel>
                   avatar: Icon(Icons.dns, size: 18, color: termTheme.green),
                   label: Text(h.label, style: TextStyle(color: textColor)),
                   backgroundColor: termTheme.background,
-                  side: BorderSide(color: termTheme.foreground.withOpacity(0.3)),
+                  side: BorderSide(color: termTheme.foreground.withValues(alpha:0.3)),
                   onPressed: () => _connectToHost(h),
                 );
               }).toList(),
@@ -433,7 +433,7 @@ class TerminalPanelState extends State<TerminalPanel>
     final hasSession = tab?.session != null;
     final statusBarColor = Color.lerp(termTheme.background, Colors.black, 0.15)!;
     final textColor = termTheme.foreground;
-    final iconColor = termTheme.foreground.withOpacity(0.8);
+    final iconColor = termTheme.foreground.withValues(alpha:0.8);
 
     return Container(
       height: 44,
@@ -442,7 +442,7 @@ class TerminalPanelState extends State<TerminalPanel>
         color: statusBarColor,
         border: Border(
           top: BorderSide(
-            color: termTheme.foreground.withOpacity(0.1),
+            color: termTheme.foreground.withValues(alpha:0.1),
             width: 1,
           ),
         ),
@@ -462,7 +462,7 @@ class TerminalPanelState extends State<TerminalPanel>
             Expanded(
               child: Text(
                 tab.connectionInfo,
-                style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.8)),
+                style: TextStyle(fontSize: 12, color: textColor.withValues(alpha:0.8)),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -499,7 +499,7 @@ class TerminalPanelState extends State<TerminalPanel>
                     const SizedBox(width: 6),
                     Text(
                       'Reconnecting...',
-                      style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.8)),
+                      style: TextStyle(fontSize: 12, color: textColor.withValues(alpha:0.8)),
                     ),
                   ],
                 ),
@@ -568,11 +568,11 @@ class TerminalPanelState extends State<TerminalPanel>
         decoration: BoxDecoration(
           color: logsColor,
           border: Border(
-            top: BorderSide(color: termTheme.foreground.withOpacity(0.1)),
+            top: BorderSide(color: termTheme.foreground.withValues(alpha:0.1)),
           ),
         ),
         child: Center(
-          child: Text('No logs', style: TextStyle(color: textColor.withOpacity(0.5))),
+          child: Text('No logs', style: TextStyle(color: textColor.withValues(alpha:0.5))),
         ),
       );
     }
@@ -582,12 +582,12 @@ class TerminalPanelState extends State<TerminalPanel>
       decoration: BoxDecoration(
         color: logsColor,
         border: Border(
-          top: BorderSide(color: termTheme.foreground.withOpacity(0.1)),
+          top: BorderSide(color: termTheme.foreground.withValues(alpha:0.1)),
         ),
       ),
       child: tab.logs.isEmpty
           ? Center(
-              child: Text('No logs yet', style: TextStyle(color: textColor.withOpacity(0.5))),
+              child: Text('No logs yet', style: TextStyle(color: textColor.withValues(alpha:0.5))),
             )
           : ListView.builder(
               reverse: true,
@@ -1301,7 +1301,7 @@ class _KeyButton extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 11,
-            color: onPressed != null ? color : color.withOpacity(0.4),
+            color: onPressed != null ? color : color.withValues(alpha:0.4),
           ),
         ),
       ),

@@ -1,11 +1,11 @@
-/// Vault orchestration service for VibedTerm.
-///
-/// This service manages the lifecycle of encrypted vault files:
-/// - Creating new vaults with password protection
-/// - Unlocking existing vaults
-/// - Managing hosts, identities, and settings
-/// - Persisting vault path and password preferences
-/// - Trusted host key management
+// Vault orchestration service for VibedTerm.
+//
+// This service manages the lifecycle of encrypted vault files:
+// - Creating new vaults with password protection
+// - Unlocking existing vaults
+// - Managing hosts, identities, and settings
+// - Persisting vault path and password preferences
+// - Trusted host key management
 
 import 'dart:io';
 

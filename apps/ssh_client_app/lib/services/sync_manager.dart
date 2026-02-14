@@ -1,38 +1,14 @@
-/// Cloud sync manager for VibedTerm.
-///
-/// This service orchestrates vault synchronization with a backend server,
-/// combining authentication and sync functionality into a unified interface.
-///
-/// ## Features
-///
-/// - Server configuration and persistence
-/// - User authentication with TOTP support
-/// - Vault push/pull with revision tracking
-/// - Conflict detection and resolution
-/// - Combined status stream for UI updates
-///
-/// ## Example
-///
-/// ```dart
-/// final syncManager = SyncManager();
-/// await syncManager.init();
-///
-/// // Configure server
-/// await syncManager.configure('https://sync.example.com');
-///
-/// // Login
-/// await syncManager.login(
-///   email: 'user@example.com',
-///   password: 'password',
-///   deviceName: 'My Device',
-///   deviceType: 'android',
-/// );
-///
-/// // Sync vault
-/// final result = await syncManager.syncVault(
-///   vaultFilePath: '/path/to/vault.vlt',
-/// );
-/// ```
+// Cloud sync manager for VibedTerm.
+//
+// This service orchestrates vault synchronization with a backend server,
+// combining authentication and sync functionality into a unified interface.
+//
+// Features:
+// - Server configuration and persistence
+// - User authentication with TOTP support
+// - Vault push/pull with revision tracking
+// - Conflict detection and resolution
+// - Combined status stream for UI updates
 
 import 'dart:async';
 import 'dart:convert';

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:core_sync/core_sync.dart';
 import 'package:ssh_client_app/services/sync_manager.dart';
 
 /// Test implementation of SyncManager for widget tests.

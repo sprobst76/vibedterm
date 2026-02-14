@@ -1,4 +1,5 @@
-import 'package:core_sync/core_sync.dart';
+import 'dart:async';
+
 import 'package:core_vault/core_vault.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -115,44 +116,6 @@ class _VaultScreenState extends State<VaultScreen> {
     await service.unlockVault(
       path: path,
       password: passwordResult.password,
-      rememberPasswordForSession: passwordResult.rememberSession,
-      rememberPasswordSecurely: passwordResult.rememberSecure,
-    );
-  }
-
-  Future<void> _pickAndCreate(BuildContext context) async {
-    final result = await FilePicker.platform.saveFile(
-      dialogTitle: 'Choose vault path',
-      fileName: 'vibedterm.vlt',
-      type: FileType.any,
-    );
-    var path = result;
-    if (path == null) {
-      final docs = await getApplicationDocumentsDirectory();
-      path = '${docs.path}/vibedterm.vlt';
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No path chosen, creating at $path')),
-        );
-      }
-    }
-    final passwordResult =
-        await _promptForPassword(context, title: 'Set vault password');
-    if (passwordResult == null || passwordResult.password.isEmpty) return;
-    final now = DateTime.now().toUtc().toIso8601String();
-    final payload = VaultPayload(
-      data: VaultData(
-        version: 1,
-        revision: 1,
-        deviceId: 'device-${DateTime.now().millisecondsSinceEpoch}',
-        createdAt: now,
-        updatedAt: now,
-      ),
-    );
-    await service.createVault(
-      path: path,
-      password: passwordResult.password,
-      payload: payload,
       rememberPasswordForSession: passwordResult.rememberSession,
       rememberPasswordSecurely: passwordResult.rememberSecure,
     );
@@ -280,7 +243,7 @@ class _VaultScreenState extends State<VaultScreen> {
 
     // Show progress dialog
     if (!context.mounted) return;
-    showDialog(
+    unawaited(showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const AlertDialog(
@@ -292,7 +255,7 @@ class _VaultScreenState extends State<VaultScreen> {
           ],
         ),
       ),
-    );
+    ));
 
     try {
       // Download vault from server
