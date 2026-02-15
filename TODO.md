@@ -2,6 +2,12 @@
 
 ## Recently Completed
 
+- [x] SFTP file browser with directory navigation, upload/download, delete, new folder
+- [x] Drag & drop file upload on SFTP browser and terminal (desktop_drop)
+- [x] Quick-connect bar: Type `user@host:port` directly in tab bar
+- [x] Auto-sync: Debounced vault sync to server after every mutation
+- [x] Vault reload from disk after server pull
+- [x] tmux session list auto-refresh (3s timer in session manager dialog)
 - [x] tmux quick-switch popup with one-click session switching
 - [x] Fix session manager dialog to use runCommand for session listing
 - [x] File modularity: Split large files (core_vault, main, terminal_screen) into modules
@@ -32,27 +38,19 @@
 
 ## Planned
 
-### High Priority
-
-- [x] **tmux session list auto-refresh**: Session manager dialog refreshes every 3s
-
 ### Medium Priority
 
 - [ ] **Session recording**: Record and playback terminal sessions
-- [ ] **SFTP file browser**: Browse and transfer files via SFTP
 - [ ] **Search in terminal**: Find text in terminal output
 - [ ] **Split panes**: Multiple terminals in one tab
 - [ ] **Port forwarding UI**: Local/Remote port forwarding with GUI
 - [ ] **SSH agent forwarding**: Forward SSH agent for Git operations on remote servers
 - [ ] **Host groups/folders**: Organize hosts in folders as list grows
-- [ ] **Quick-connect bar**: Type `user@host` directly without creating a host entry
-- [ ] **Drag & drop file transfer**: Drop files onto terminal for automatic scp/sftp upload
 
 ### Low Priority
 
 - [ ] **Scrypt KDF**: Implement or remove `KdfKind.scrypt` enum value
 - [ ] **State management**: Consider Riverpod/Bloc as complexity grows
-- [ ] **Cloud sync**: Implement `core_sync` for OneDrive/Google Drive vault sync
 - [ ] **iOS/macOS support**: Add Apple platform targets
 - [ ] **Localization**: Multi-language support
 - [ ] **Terminal font preview**: Font preview in terminal settings
