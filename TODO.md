@@ -2,6 +2,8 @@
 
 ## Recently Completed
 
+- [x] Search in terminal: Ctrl+F search bar with xterm.js SearchAddon integration
+- [x] Port forwarding UI: Local/Remote SSH tunnel management dialog
 - [x] Host groups/folders: Organize hosts in collapsible folder sections
 - [x] Tailscale node discovery: Scan and import Tailscale peers as hosts
 - [x] SFTP file browser with directory navigation, upload/download, delete, new folder
@@ -43,9 +45,7 @@
 ### Medium Priority
 
 - [ ] **Session recording**: Record and playback terminal sessions
-- [ ] **Search in terminal**: Find text in terminal output
 - [ ] **Split panes**: Multiple terminals in one tab
-- [ ] **Port forwarding UI**: Local/Remote port forwarding with GUI
 - [ ] **SSH agent forwarding**: Forward SSH agent for Git operations on remote servers
 
 ### Low Priority
