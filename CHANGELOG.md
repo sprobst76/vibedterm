@@ -2,6 +2,42 @@
 
 All notable changes to VibedTerm will be documented in this file.
 
+## [0.4.0] - 2026-02-15
+
+### Added
+
+#### Cloud Sync & Server
+- **Zero-knowledge sync server**: Go/Gin server with PostgreSQL for encrypted vault synchronization
+- **User registration & login**: Web UI at `/register` and `/account/login` with session-based auth
+- **User settings web UI**: Change password, manage 2FA, view/remove registered devices at `/account/settings`
+- **Admin web UI**: Dashboard, user management (approve/reject/block), create users at `/admin/`
+- **Admin create user**: Directly create pre-approved users from the admin interface
+- **TOTP two-factor authentication**: Enable/disable 2FA via app, verify on web login
+- **Multi-device sync**: Register multiple devices, automatic vault sync across all
+- **Auto-sync**: Debounced vault sync to server after every vault mutation
+- **Vault reload**: Automatic vault reload from disk after server pull
+
+#### Host Management
+- **Host groups/folders**: Organize hosts in collapsible folder sections with drag & drop
+- **Tailscale node discovery**: Scan and import Tailscale peers as SSH hosts
+- **Quick-connect bar**: Type `user@host:port` directly in the tab bar to connect
+
+#### Terminal Features
+- **Terminal search**: Ctrl+F search bar with xterm.js SearchAddon (find, next, previous, regex, case-sensitive)
+- **Port forwarding UI**: Local and remote SSH tunnel management dialog in status bar
+- **SFTP file browser**: Directory navigation, upload/download, delete, new folder with drag & drop support
+
+#### SSH & Connection
+- **Auto-reconnect**: Exponential backoff reconnection for dropped connections
+- **Import SSH keys**: Import private keys directly from `~/.ssh/` directory
+- **Key fingerprint display**: Show SSH key fingerprints in identity management
+
+### Changed
+- Split large source files into focused modules for better maintainability
+- Template parsing refactored to per-page sets to prevent layout collisions
+
+---
+
 ## [0.3.0] - 2026-02-14
 
 ### Added

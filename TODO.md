@@ -2,6 +2,8 @@
 
 ## Recently Completed
 
+- [x] User settings web UI: Registration, login, password change, 2FA management, device list
+- [x] Admin create user: Pre-approved user creation from admin interface
 - [x] Search in terminal: Ctrl+F search bar with xterm.js SearchAddon integration
 - [x] Port forwarding UI: Local/Remote SSH tunnel management dialog
 - [x] Host groups/folders: Organize hosts in collapsible folder sections

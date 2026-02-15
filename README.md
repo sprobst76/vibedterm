@@ -4,7 +4,7 @@
   <img src="apps/ssh_client_app/assets/icon.png" width="128" height="128" alt="VibedTerm Icon">
 </p>
 
-A modern, Flutter-based SSH terminal client for Windows, Linux, and Android. Features an encrypted vault for secure credential storage, multi-tab terminal sessions, tmux integration, and customizable themes.
+A modern, Flutter-based SSH terminal client for Windows, Linux, and Android. Features an encrypted vault for secure credential storage, multi-tab terminal sessions, tmux integration, cloud sync, SFTP file browser, port forwarding, and customizable themes.
 
 ## Zero-Knowledge Architecture
 
@@ -21,30 +21,41 @@ VibedTerm is designed with a **zero-knowledge security model**:
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
-              Cloud Storage (only encrypted blobs)
-              Provider CANNOT read your data
+               VibedTerm Sync Server
+               (only encrypted blobs, zero-knowledge)
 ```
 
 **Key principles:**
 
-- **No server required** - VibedTerm has no backend; your data never leaves your device unencrypted
+- **Zero-knowledge server** - The sync server only stores encrypted blobs; it cannot read your data
 - **Password never transmitted** - Used only locally to derive the encryption key via Argon2id
-- **End-to-end encryption** - All vault data encrypted with XChaCha20-Poly1305 before any sync
-- **Zero trust in cloud providers** - OneDrive/Google Drive only see encrypted blobs
+- **End-to-end encryption** - All vault data encrypted with XChaCha20-Poly1305 before sync
+- **Multi-device sync** - Sync your vault across desktop and mobile devices
+- **Two-factor authentication** - Optional TOTP 2FA for server account security
 - **Open source** - Verify the security model yourself
 
 See [Security Architecture](docs/security_architecture.md) for detailed cryptographic design.
 
 ## Features
 
+### Cloud Sync
+- **Zero-Knowledge Server**: Self-hosted Go server for encrypted vault synchronization
+- **Multi-Device Sync**: Sync hosts, identities, and snippets across all your devices
+- **Auto-Sync**: Automatic debounced sync after every vault change
+- **TOTP 2FA**: Optional two-factor authentication for server account
+- **User Web UI**: Manage account settings, password, 2FA, and devices via browser
+- **Admin Web UI**: User management dashboard with approval workflow
+
 ### Security
 - **Encrypted Vault**: Store SSH hosts and identities with Argon2id KDF and XChaCha20-Poly1305/AES-256-GCM encryption
 - **Host Key Verification**: Trust prompts with fingerprint display, persisted in vault
 - **Auto-Unlock**: Optionally remember vault password securely for auto-unlock on startup
 - **Password & Key Auth**: Supports both password and private key authentication
+- **SSH Key Import**: Import private keys directly from `~/.ssh/` with fingerprint display
 
 ### Terminal
 - **Multi-Tab Sessions**: Terminus-like UX with independent SSH connections per tab
+- **Terminal Search**: Ctrl+F search with regex, case-sensitive, and whole word options
 - **Keyboard Shortcuts**: Ctrl+Tab to cycle tabs, Ctrl+1-9 for direct access, Ctrl+T/W to open/close
 - **12 Color Themes**: Dark and light themes including Dracula, Monokai, Solarized, Nord, Gruvbox, One Dark/Light, GitHub Light
 - **App-Wide Theming**: Terminal theme colors apply to the entire application
@@ -52,17 +63,23 @@ See [Security Architecture](docs/security_architecture.md) for detailed cryptogr
 - **Command Snippets**: Save and quickly send frequently used commands to terminal sessions
 - **Mobile Extra Keys**: Scrollable row with arrows, Ctrl combos, and special characters on Android/iOS
 
+### SSH Features
+- **Port Forwarding**: Local and remote SSH tunnel management via UI
+- **SFTP File Browser**: Browse directories, upload/download files, drag & drop support
+- **Auto-Reconnect**: Automatic reconnection with exponential backoff
+- **Keepalive**: Configurable interval to prevent disconnection
+- **Connection Timeout**: Adjustable timeout for slow connections
+
+### Host Management
+- **Host Groups**: Organize hosts in collapsible folders
+- **Tailscale Discovery**: Scan and import Tailscale peers as SSH hosts
+- **Quick-Connect Bar**: Type `user@host:port` directly in the tab bar
+
 ### tmux Integration
 - **Auto-Attach**: Automatically attach to or create tmux sessions on connect
 - **Session Picker**: Choose from existing sessions when multiple are available
 - **Session Manager**: Create, attach, detach, and kill tmux sessions via UI
 - **Tab Labels**: Show attached tmux session name in tab header
-
-### SSH Settings
-- **Keepalive**: Configurable interval to prevent disconnection
-- **Connection Timeout**: Adjustable timeout for slow connections
-- **Default Port**: Set your preferred default SSH port
-- **Auto-Reconnect**: Automatically reconnect on connection loss (planned)
 
 ### UI/UX
 - **Compact Sidebar**: Vertical navigation with rotated branding
@@ -91,10 +108,30 @@ cd apps/ssh_client_app
 flutter run -d linux    # or windows, or android device
 ```
 
+### Sync Server (optional)
+
+```bash
+cd server
+
+# Configure environment
+cp .env.example .env  # Edit with your PostgreSQL credentials
+
+# Build and run
+go build -o vibedterm-server ./cmd/server
+./vibedterm-server
+```
+
+The server provides:
+- **User registration** at `/register` (requires admin approval)
+- **User settings** at `/account/settings` (password, 2FA, devices)
+- **Admin dashboard** at `/admin/` (user management, statistics)
+
 ### Requirements
 
 - Flutter 3.16.0 or later
 - Dart 3.3.0 or later
+- Go 1.23 or later (for sync server)
+- PostgreSQL 15+ (for sync server)
 
 ## Usage
 
@@ -127,8 +164,12 @@ vibedterm/
 ├── packages/
 │   ├── core_vault/         # Encrypted vault, crypto, data models
 │   ├── core_ssh/           # SSH session management (dartssh2 wrapper)
-│   ├── core_sync/          # Sync abstraction (planned)
+│   ├── core_sync/          # Sync client for server communication
 │   └── ui_terminal/        # Terminal widget (xterm wrapper)
+├── server/                 # Zero-knowledge sync server (Go/Gin/PostgreSQL)
+│   ├── cmd/server/         # Server entry point
+│   ├── internal/           # Handlers, repositories, middleware, web UI
+│   └── migrations/         # Database migrations
 ├── docs/                   # Documentation
 ├── CHANGELOG.md            # Version history
 ├── TODO.md                 # Roadmap and known issues

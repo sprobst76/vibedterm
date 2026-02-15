@@ -4,7 +4,10 @@
 
 {{define "content"}}
 <div class="users-page">
-    <h1 class="page-title">User Management</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1 class="page-title">User Management</h1>
+        <a href="/admin/users/create" class="btn btn-primary">Create User</a>
+    </div>
 
     {{if .Success}}
     <div class="alert alert-success">

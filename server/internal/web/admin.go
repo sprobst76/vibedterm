@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"time"
@@ -35,12 +36,8 @@ func NewAdminWeb(
 	deviceRepo *repository.DeviceRepository,
 	vaultRepo *repository.VaultRepository,
 	refreshRepo *repository.RefreshTokenRepository,
-) (*AdminWeb, error) {
-	templates, err := NewTemplates()
-	if err != nil {
-		return nil, err
-	}
-
+	templates *Templates,
+) *AdminWeb {
 	return &AdminWeb{
 		templates:   templates,
 		sessions:    NewSessionStore(sessionDuration),
@@ -48,7 +45,7 @@ func NewAdminWeb(
 		deviceRepo:  deviceRepo,
 		vaultRepo:   vaultRepo,
 		refreshRepo: refreshRepo,
-	}, nil
+	}
 }
 
 // RegisterRoutes registers all admin web routes
@@ -74,6 +71,8 @@ func (a *AdminWeb) RegisterRoutes(r *gin.Engine) {
 			protected.GET("/", a.index)
 			protected.GET("/dashboard", a.dashboard)
 			protected.GET("/users", a.usersPage)
+			protected.GET("/users/create", a.createUserPage)
+			protected.POST("/users/create", a.createUser)
 			protected.POST("/users/:id/approve", a.approveUser)
 			protected.POST("/users/:id/reject", a.rejectUser)
 			protected.POST("/users/:id/block", a.blockUser)
@@ -339,6 +338,68 @@ func (a *AdminWeb) usersPage(c *gin.Context) {
 		log.Error().Err(err).Msg("Failed to render users template")
 		c.String(http.StatusInternalServerError, "Internal server error")
 	}
+}
+
+// createUserPage shows the create user form
+func (a *AdminWeb) createUserPage(c *gin.Context) {
+	session := c.MustGet("session").(*Session)
+	data := gin.H{
+		"Title": "Create User",
+		"Email": session.Email,
+		"Error": c.Query("error"),
+	}
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	if err := a.templates.Render(c.Writer, "create_user.html", data); err != nil {
+		log.Error().Err(err).Msg("Failed to render create user template")
+		c.String(http.StatusInternalServerError, "Internal server error")
+	}
+}
+
+// createUser handles the create user form submission
+func (a *AdminWeb) createUser(c *gin.Context) {
+	email := c.PostForm("email")
+	password := c.PostForm("password")
+	confirmPassword := c.PostForm("confirm_password")
+
+	if email == "" || password == "" {
+		c.Redirect(http.StatusFound, "/admin/users/create?error=Email+and+password+required")
+		return
+	}
+
+	if len(password) < 8 {
+		c.Redirect(http.StatusFound, "/admin/users/create?error=Password+must+be+at+least+8+characters")
+		return
+	}
+
+	if password != confirmPassword {
+		c.Redirect(http.StatusFound, "/admin/users/create?error=Passwords+do+not+match")
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/admin/users/create?error=Internal+error")
+		return
+	}
+
+	user, err := a.userRepo.Create(c.Request.Context(), email, string(hashedPassword))
+	if err != nil {
+		if errors.Is(err, repository.ErrUserAlreadyExists) {
+			c.Redirect(http.StatusFound, "/admin/users/create?error=Email+already+registered")
+			return
+		}
+		log.Error().Err(err).Msg("Failed to create user via admin")
+		c.Redirect(http.StatusFound, "/admin/users/create?error=Failed+to+create+user")
+		return
+	}
+
+	// Auto-approve the user
+	if err := a.userRepo.SetApproved(c.Request.Context(), user.ID, true); err != nil {
+		log.Error().Err(err).Msg("Failed to approve newly created user")
+	}
+
+	log.Info().Str("email", email).Msg("User created via admin interface")
+	c.Redirect(http.StatusFound, "/admin/users?success=User+created+and+approved")
 }
 
 // approveUser approves a pending user

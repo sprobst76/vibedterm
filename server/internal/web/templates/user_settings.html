@@ -1,0 +1,67 @@
+{{define "user_settings.html"}}
+{{template "user_layout" .}}
+{{end}}
+
+{{define "content"}}
+<h1 class="page-title">Account Settings</h1>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+    <div class="card-header"><h2>Account Information</h2></div>
+    <div class="card-body">
+        <table class="table">
+            <tr>
+                <td><strong>Email</strong></td>
+                <td>{{.Email}}</td>
+            </tr>
+            <tr>
+                <td><strong>Member since</strong></td>
+                <td>{{formatTime .CreatedAt}}</td>
+            </tr>
+            <tr>
+                <td><strong>Two-Factor Auth</strong></td>
+                <td>
+                    {{if .TOTPEnabled}}<span class="badge badge-success">Enabled</span>
+                    {{else}}<span class="badge badge-warning">Disabled</span>{{end}}
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>Change Password</h2></div>
+    <div class="card-body">
+        <form action="/account/settings/password" method="POST" style="max-width: 400px;">
+            <div class="form-group">
+                <label for="current_password">Current Password</label>
+                <input type="password" id="current_password" name="current_password" required>
+            </div>
+            <div class="form-group">
+                <label for="new_password">New Password</label>
+                <input type="password" id="new_password" name="new_password" required minlength="8">
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirm New Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Update Password</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>Two-Factor Authentication</h2></div>
+    <div class="card-body">
+        {{if .TOTPEnabled}}
+        <p>Two-factor authentication is currently <strong>enabled</strong>.</p>
+        <a href="/account/settings/totp" class="btn btn-warning">Manage 2FA</a>
+        {{else}}
+        <p>Two-factor authentication is currently <strong>disabled</strong>.</p>
+        <p class="text-muted" style="margin-top: 0.5rem;">Enable 2FA via the VibedTerm desktop or mobile app.</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

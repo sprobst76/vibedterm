@@ -57,11 +57,13 @@ func main() {
 	deviceHandler := handlers.NewDeviceHandler(deviceRepo, refreshRepo)
 	adminHandler := handlers.NewAdminHandler(userRepo, deviceRepo, vaultRepo, refreshRepo)
 
-	// Create admin web interface
-	adminWeb, err := web.NewAdminWeb(userRepo, deviceRepo, vaultRepo, refreshRepo)
+	// Create shared templates and web interfaces
+	templates, err := web.NewTemplates()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create admin web interface")
+		log.Fatal().Err(err).Msg("Failed to parse web templates")
 	}
+	adminWeb := web.NewAdminWeb(userRepo, deviceRepo, vaultRepo, refreshRepo, templates)
+	userWeb := web.NewUserWeb(userRepo, deviceRepo, templates)
 
 	// Setup Gin
 	gin.SetMode(cfg.ServerMode)
@@ -72,8 +74,9 @@ func main() {
 	// CORS middleware
 	r.Use(corsMiddleware())
 
-	// Register admin web interface routes
+	// Register web interface routes
 	adminWeb.RegisterRoutes(r)
+	userWeb.RegisterRoutes(r)
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
