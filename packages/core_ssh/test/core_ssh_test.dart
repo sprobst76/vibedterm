@@ -92,6 +92,16 @@ class _FakeAdapter implements SshClientAdapter {
   }
 
   @override
+  Future<SSHForwardChannel> forwardLocal(String remoteHost, int remotePort) async {
+    throw SshException(SshErrorKind.unknown, 'Port forwarding not supported in tests');
+  }
+
+  @override
+  Future<SSHRemoteForward?> forwardRemote({required String host, required int port}) async {
+    throw SshException(SshErrorKind.unknown, 'Port forwarding not supported in tests');
+  }
+
+  @override
   Future<void> disconnect() async {
     if (!_shellOut.isClosed) {
       await _shellOut.close();

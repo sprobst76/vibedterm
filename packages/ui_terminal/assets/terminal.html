@@ -17,10 +17,12 @@
   <div id="terminal-container"></div>
   <script src="xterm.js"></script>
   <script src="xterm-addon-fit.js"></script>
+  <script src="xterm-addon-search.js"></script>
   <script>
     // --- State ---
     var term = null;
     var fitAddon = null;
+    var searchAddon = null;
 
     // --- Dart communication ---
     function sendToDart(type, payload) {
@@ -92,6 +94,45 @@
         case 'scrollToBottom':
           if (term) term.scrollToBottom();
           break;
+        case 'searchNext':
+          if (searchAddon && msg.query) {
+            var found = searchAddon.findNext(msg.query, {
+              caseSensitive: msg.caseSensitive || false,
+              regex: msg.regex || false,
+              wholeWord: msg.wholeWord || false,
+              decorations: {
+                matchBackground: '#FFFF2B50',
+                activeMatchBackground: '#31FF2680',
+                matchBorder: '#FFFF2B',
+                activeMatchBorder: '#31FF26',
+                matchOverviewRuler: '#FFFF2B',
+                activeMatchColorOverviewRuler: '#31FF26'
+              }
+            });
+            sendToDart('searchResult', { found: found });
+          }
+          break;
+        case 'searchPrevious':
+          if (searchAddon && msg.query) {
+            var found = searchAddon.findPrevious(msg.query, {
+              caseSensitive: msg.caseSensitive || false,
+              regex: msg.regex || false,
+              wholeWord: msg.wholeWord || false,
+              decorations: {
+                matchBackground: '#FFFF2B50',
+                activeMatchBackground: '#31FF2680',
+                matchBorder: '#FFFF2B',
+                activeMatchBorder: '#31FF26',
+                matchOverviewRuler: '#FFFF2B',
+                activeMatchColorOverviewRuler: '#31FF26'
+              }
+            });
+            sendToDart('searchResult', { found: found });
+          }
+          break;
+        case 'clearSearch':
+          if (searchAddon) searchAddon.clearDecorations();
+          break;
         case 'dispose':
           if (term) term.dispose();
           break;
@@ -111,6 +152,9 @@
 
       fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
+
+      searchAddon = new SearchAddon.SearchAddon();
+      term.loadAddon(searchAddon);
 
       term.open(document.getElementById('terminal-container'));
       fitAddon.fit();

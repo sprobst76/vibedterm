@@ -45,6 +45,8 @@ class TerminalPanelState extends State<TerminalPanel>
   final Map<String, Set<String>> _trustedHostKeys = {};
   bool _showLogs = false;
   bool _isDragging = false;
+  bool _showSearchBar = false;
+  final _searchController = TextEditingController();
   late final VoidCallback _vaultListener;
   final _quickConnectController = TextEditingController();
 
@@ -101,6 +103,7 @@ class TerminalPanelState extends State<TerminalPanel>
               child: Column(
                 children: [
                   _buildTabBar(termTheme),
+                  if (_showSearchBar) _buildSearchBar(termTheme),
                   Expanded(child: _buildTerminalArea(termTheme)),
                   if (_isMobilePlatform(context)) _buildExtraKeyRow(termTheme),
                   _buildStatusBar(termTheme),
@@ -164,6 +167,15 @@ class TerminalPanelState extends State<TerminalPanel>
     // Ctrl+T — new connection
     if (event.logicalKey == LogicalKeyboardKey.keyT && !shift) {
       _showHostPicker();
+      return KeyEventResult.handled;
+    }
+
+    // Ctrl+F — search in terminal
+    if (event.logicalKey == LogicalKeyboardKey.keyF && !shift) {
+      setState(() => _showSearchBar = !_showSearchBar);
+      if (!_showSearchBar) {
+        _activeTab?.bridge.clearSearch();
+      }
       return KeyEventResult.handled;
     }
 
@@ -382,6 +394,70 @@ class TerminalPanelState extends State<TerminalPanel>
         ],
       ),
     );
+  }
+
+  Widget _buildSearchBar(TerminalTheme termTheme) {
+    final barColor = Color.lerp(termTheme.background, termTheme.foreground, 0.1)!;
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      color: barColor,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              style: TextStyle(color: termTheme.foreground, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search...',
+                hintStyle: TextStyle(color: termTheme.foreground.withValues(alpha: 0.4)),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              ),
+              onSubmitted: (_) => _doSearchNext(),
+              onChanged: (_) => _doSearchNext(),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.keyboard_arrow_up, color: termTheme.foreground.withValues(alpha: 0.7), size: 20),
+            tooltip: 'Previous (Shift+Enter)',
+            onPressed: _doSearchPrevious,
+            visualDensity: VisualDensity.compact,
+          ),
+          IconButton(
+            icon: Icon(Icons.keyboard_arrow_down, color: termTheme.foreground.withValues(alpha: 0.7), size: 20),
+            tooltip: 'Next (Enter)',
+            onPressed: _doSearchNext,
+            visualDensity: VisualDensity.compact,
+          ),
+          IconButton(
+            icon: Icon(Icons.close, color: termTheme.foreground.withValues(alpha: 0.7), size: 20),
+            tooltip: 'Close (Escape)',
+            onPressed: _closeSearch,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _doSearchNext() {
+    final query = _searchController.text;
+    if (query.isEmpty) return;
+    _activeTab?.bridge.searchNext(query);
+  }
+
+  void _doSearchPrevious() {
+    final query = _searchController.text;
+    if (query.isEmpty) return;
+    _activeTab?.bridge.searchPrevious(query);
+  }
+
+  void _closeSearch() {
+    _activeTab?.bridge.clearSearch();
+    setState(() => _showSearchBar = false);
   }
 
   Widget _buildTerminalArea(TerminalTheme termTheme) {
@@ -625,6 +701,14 @@ class TerminalPanelState extends State<TerminalPanel>
             icon: Icon(Icons.code, size: 18, color: iconColor),
             tooltip: 'Snippets',
             onPressed: hasSession ? _showSnippetPicker : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          IconButton(
+            icon: Icon(Icons.swap_horiz, size: 18, color: iconColor),
+            tooltip: 'Port forwarding',
+            onPressed: tab != null && tab.status == TabConnectionStatus.connected
+                ? () => _showPortForwarding(tab)
+                : null,
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
@@ -1500,6 +1584,18 @@ class TerminalPanelState extends State<TerminalPanel>
     }
 
     if (mounted) setState(() {});
+  }
+
+  void _showPortForwarding(_ConnectionTab tab) {
+    showDialog(
+      context: context,
+      builder: (context) => _PortForwardingDialog(
+        tab: tab,
+        onForwardChanged: () {
+          if (mounted) setState(() {});
+        },
+      ),
+    );
   }
 
   void _showTmuxManager(_ConnectionTab tab) {

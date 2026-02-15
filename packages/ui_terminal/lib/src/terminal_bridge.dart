@@ -118,6 +118,9 @@ class TerminalBridge {
       case JsChannelProtocol.selection:
         _selectionCompleter?.complete(msg['text'] as String?);
         break;
+      case JsChannelProtocol.searchResult:
+        _searchResultCompleter?.complete(msg['found'] as bool? ?? false);
+        break;
     }
   }
 
@@ -214,6 +217,81 @@ class TerminalBridge {
       return;
     }
     _sendToJs?.call(jsonEncode({'type': JsChannelProtocol.clearSelection}));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Search
+  // ---------------------------------------------------------------------------
+
+  Completer<bool>? _searchResultCompleter;
+
+  /// Search for the next occurrence of [query] in the terminal buffer.
+  Future<bool> searchNext(String query, {bool caseSensitive = false, bool regex = false, bool wholeWord = false}) async {
+    if (query.isEmpty) return false;
+    if (isNative) {
+      return _nativeSearch(query, forward: true, caseSensitive: caseSensitive);
+    }
+    if (_sendToJs == null) return false;
+    _searchResultCompleter = Completer<bool>();
+    unawaited(_sendToJs!(jsonEncode({
+      'type': JsChannelProtocol.searchNext,
+      'query': query,
+      'caseSensitive': caseSensitive,
+      'regex': regex,
+      'wholeWord': wholeWord,
+    })));
+    return _searchResultCompleter!.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => false,
+    );
+  }
+
+  /// Search for the previous occurrence of [query] in the terminal buffer.
+  Future<bool> searchPrevious(String query, {bool caseSensitive = false, bool regex = false, bool wholeWord = false}) async {
+    if (query.isEmpty) return false;
+    if (isNative) {
+      return _nativeSearch(query, forward: false, caseSensitive: caseSensitive);
+    }
+    if (_sendToJs == null) return false;
+    _searchResultCompleter = Completer<bool>();
+    unawaited(_sendToJs!(jsonEncode({
+      'type': JsChannelProtocol.searchPrevious,
+      'query': query,
+      'caseSensitive': caseSensitive,
+      'regex': regex,
+      'wholeWord': wholeWord,
+    })));
+    return _searchResultCompleter!.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => false,
+    );
+  }
+
+  /// Clear search highlights.
+  void clearSearch() {
+    if (isNative) {
+      _nativeController?.clearSelection();
+      return;
+    }
+    _sendToJs?.call(jsonEncode({'type': JsChannelProtocol.clearSearch}));
+  }
+
+  /// Simple line-by-line search for native xterm (Linux).
+  bool _nativeSearch(String query, {required bool forward, bool caseSensitive = false}) {
+    final terminal = _nativeTerminal;
+    if (terminal == null) return false;
+    final buffer = terminal.buffer;
+    final totalLines = buffer.lines.length;
+    final searchQuery = caseSensitive ? query : query.toLowerCase();
+
+    for (int i = 0; i < totalLines; i++) {
+      final line = buffer.lines[i];
+      final text = caseSensitive ? line.toString() : line.toString().toLowerCase();
+      if (text.contains(searchQuery)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------

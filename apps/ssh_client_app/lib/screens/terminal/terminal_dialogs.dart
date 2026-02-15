@@ -166,3 +166,273 @@ class _TerminalSettingsDialogState extends State<_TerminalSettingsDialog> {
     }
   }
 }
+
+// -----------------------------------------------------------------------------
+// Port Forwarding Dialog
+// -----------------------------------------------------------------------------
+
+class _PortForwardingDialog extends StatefulWidget {
+  const _PortForwardingDialog({
+    required this.tab,
+    required this.onForwardChanged,
+  });
+
+  final _ConnectionTab tab;
+  final VoidCallback onForwardChanged;
+
+  @override
+  State<_PortForwardingDialog> createState() => _PortForwardingDialogState();
+}
+
+class _PortForwardingDialogState extends State<_PortForwardingDialog> {
+  String _type = 'local';
+  final _localHostController = TextEditingController(text: 'localhost');
+  final _localPortController = TextEditingController();
+  final _remoteHostController = TextEditingController(text: 'localhost');
+  final _remotePortController = TextEditingController();
+  bool _isStarting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _localHostController.dispose();
+    _localPortController.dispose();
+    _remoteHostController.dispose();
+    _remotePortController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final forwards = widget.tab.manager.activeForwards;
+
+    return AlertDialog(
+      title: const Text('Port Forwarding'),
+      content: SizedBox(
+        width: 450,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Active forwards
+              if (forwards.isNotEmpty) ...[
+                Text('Active Forwards',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                ...forwards.where((f) => f.active).map(_buildForwardTile),
+                const Divider(height: 24),
+              ],
+
+              // Add new forward
+              Text('New Forward',
+                  style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 12),
+
+              // Type selector
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'local',
+                    label: Text('Local'),
+                    icon: Icon(Icons.arrow_forward, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: 'remote',
+                    label: Text('Remote'),
+                    icon: Icon(Icons.arrow_back, size: 16),
+                  ),
+                ],
+                selected: {_type},
+                onSelectionChanged: (sel) =>
+                    setState(() => _type = sel.first),
+              ),
+              const SizedBox(height: 8),
+
+              // Description text
+              Text(
+                _type == 'local'
+                    ? 'Listen locally, forward traffic to remote host'
+                    : 'Listen on remote server, forward traffic to local host',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+
+              // Local host/port row
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _localHostController,
+                      decoration: const InputDecoration(
+                        labelText: 'Local host',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _localPortController,
+                      decoration: const InputDecoration(
+                        labelText: 'Local port',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Remote host/port row
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _remoteHostController,
+                      decoration: const InputDecoration(
+                        labelText: 'Remote host',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _remotePortController,
+                      decoration: const InputDecoration(
+                        labelText: 'Remote port',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              ],
+
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: _isStarting ? null : _startForward,
+                  icon: _isStarting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow),
+                  label: const Text('Start'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForwardTile(ActivePortForward forward) {
+    final rule = forward.rule;
+    final icon = rule.type == 'local' ? Icons.arrow_forward : Icons.arrow_back;
+    final label = rule.type == 'local'
+        ? '${rule.localHost}:${rule.localPort} \u2192 ${rule.remoteHost}:${rule.remotePort}'
+        : '${rule.remoteHost}:${rule.remotePort} \u2192 ${rule.localHost}:${rule.localPort}';
+
+    return ListTile(
+      leading: Icon(icon, size: 20),
+      title: Text(label, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+      subtitle: Text(rule.type == 'local' ? 'Local forward' : 'Remote forward'),
+      trailing: IconButton(
+        icon: const Icon(Icons.stop_circle_outlined, color: Colors.red),
+        tooltip: 'Stop',
+        onPressed: () async {
+          await widget.tab.manager.stopForward(forward);
+          widget.onForwardChanged();
+          if (mounted) setState(() {});
+        },
+      ),
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  Future<void> _startForward() async {
+    final localPort = int.tryParse(_localPortController.text.trim());
+    final remotePort = int.tryParse(_remotePortController.text.trim());
+    final localHost = _localHostController.text.trim();
+    final remoteHost = _remoteHostController.text.trim();
+
+    if (localPort == null || localPort < 1 || localPort > 65535) {
+      setState(() => _error = 'Invalid local port');
+      return;
+    }
+    if (remotePort == null || remotePort < 1 || remotePort > 65535) {
+      setState(() => _error = 'Invalid remote port');
+      return;
+    }
+    if (localHost.isEmpty) {
+      setState(() => _error = 'Local host is required');
+      return;
+    }
+    if (remoteHost.isEmpty) {
+      setState(() => _error = 'Remote host is required');
+      return;
+    }
+
+    setState(() {
+      _isStarting = true;
+      _error = null;
+    });
+
+    try {
+      final rule = PortForwardRule(
+        type: _type,
+        localHost: localHost,
+        localPort: localPort,
+        remoteHost: remoteHost,
+        remotePort: remotePort,
+      );
+
+      if (_type == 'local') {
+        await widget.tab.manager.startLocalForward(rule);
+      } else {
+        await widget.tab.manager.startRemoteForward(rule);
+      }
+
+      widget.onForwardChanged();
+      if (mounted) {
+        setState(() {
+          _isStarting = false;
+          _localPortController.clear();
+          _remotePortController.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isStarting = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+}

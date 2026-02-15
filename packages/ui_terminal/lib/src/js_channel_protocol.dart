@@ -17,10 +17,14 @@ abstract class JsChannelProtocol {
   static const String blur = 'blur';
   static const String scrollToBottom = 'scrollToBottom';
   static const String dispose = 'dispose';
+  static const String searchNext = 'searchNext';
+  static const String searchPrevious = 'searchPrevious';
+  static const String clearSearch = 'clearSearch';
 
   // JavaScript → Dart message types
   static const String ready = 'ready';
   static const String input = 'input';
   static const String resize = 'resize';
   static const String selection = 'selection';
+  static const String searchResult = 'searchResult';
 }

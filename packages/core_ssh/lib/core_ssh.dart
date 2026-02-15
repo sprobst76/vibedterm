@@ -42,7 +42,8 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:meta/meta.dart';
 
 export 'package:dartssh2/dartssh2.dart'
-    show SftpClient, SftpFileAttrs, SftpName, SftpFileOpenMode, SftpFile;
+    show SftpClient, SftpFileAttrs, SftpName, SftpFileOpenMode, SftpFile,
+         SSHForwardChannel, SSHRemoteForward;
 
 // =============================================================================
 // Connection Target
@@ -257,6 +258,51 @@ class SshPtyConfig {
 }
 
 // =============================================================================
+// Port Forwarding
+// =============================================================================
+
+/// Describes a port forwarding rule (local or remote).
+@immutable
+class PortForwardRule {
+  const PortForwardRule({
+    required this.type,
+    this.localHost = 'localhost',
+    required this.localPort,
+    required this.remoteHost,
+    required this.remotePort,
+  });
+
+  /// 'local' (listen locally, forward to remote) or 'remote' (listen on remote, forward to local).
+  final String type;
+
+  /// Local bind address (default: localhost).
+  final String localHost;
+
+  /// Local port.
+  final int localPort;
+
+  /// Remote host.
+  final String remoteHost;
+
+  /// Remote port.
+  final int remotePort;
+
+  @override
+  String toString() => type == 'local'
+      ? 'L:$localHost:$localPort → $remoteHost:$remotePort'
+      : 'R:$remoteHost:$remotePort → $localHost:$localPort';
+}
+
+/// Represents an active port forwarding session that can be stopped.
+class ActivePortForward {
+  ActivePortForward({required this.rule, required this.stop});
+
+  final PortForwardRule rule;
+  final Future<void> Function() stop;
+  bool active = true;
+}
+
+// =============================================================================
 // Connection Manager
 // =============================================================================
 
@@ -272,6 +318,12 @@ abstract class SshClientAdapter {
 
   /// Opens an SFTP session for file operations.
   Future<SftpClient> openSftp();
+
+  /// Opens a direct-tcpip channel to forward data to remoteHost:remotePort.
+  Future<SSHForwardChannel> forwardLocal(String remoteHost, int remotePort);
+
+  /// Requests the remote server to listen on host:port and forward connections back.
+  Future<SSHRemoteForward?> forwardRemote({required String host, required int port});
 
   /// Disconnects and cleans up resources.
   Future<void> disconnect();
@@ -375,7 +427,120 @@ class SshConnectionManager {
     return client.openSftp();
   }
 
+  final List<ActivePortForward> _activeForwards = [];
+
+  /// Currently active port forwards for this connection.
+  List<ActivePortForward> get activeForwards =>
+      List.unmodifiable(_activeForwards.where((f) => f.active));
+
+  /// Starts a local port forward: binds a local port and tunnels connections
+  /// to remoteHost:remotePort over SSH.
+  Future<ActivePortForward> startLocalForward(PortForwardRule rule) async {
+    final client = _client;
+    if (client == null) {
+      throw SshException(SshErrorKind.disconnected, 'Not connected.');
+    }
+    _log('Starting local forward: ${rule.localHost}:${rule.localPort} → ${rule.remoteHost}:${rule.remotePort}');
+    final server = await ServerSocket.bind(rule.localHost, rule.localPort);
+    final connections = <Socket>[];
+
+    server.listen((socket) async {
+      try {
+        final channel = await client.forwardLocal(rule.remoteHost, rule.remotePort);
+        connections.add(socket);
+        // Bidirectional piping
+        socket.listen(
+          (data) => channel.sink.add(data),
+          onDone: () => channel.sink.close(),
+          onError: (_) => channel.sink.close(),
+        );
+        channel.stream.listen(
+          (data) => socket.add(data),
+          onDone: () => socket.destroy(),
+          onError: (_) => socket.destroy(),
+        );
+      } catch (e) {
+        _log('Forward connection error: $e');
+        socket.destroy();
+      }
+    });
+
+    final forward = ActivePortForward(
+      rule: rule,
+      stop: () async {
+        await server.close();
+        for (final c in connections) {
+          c.destroy();
+        }
+        connections.clear();
+      },
+    );
+    _activeForwards.add(forward);
+    _log('Local forward active on ${rule.localHost}:${rule.localPort}');
+    return forward;
+  }
+
+  /// Starts a remote port forward: asks the server to listen on a port
+  /// and forward connections back to localHost:localPort.
+  Future<ActivePortForward> startRemoteForward(PortForwardRule rule) async {
+    final client = _client;
+    if (client == null) {
+      throw SshException(SshErrorKind.disconnected, 'Not connected.');
+    }
+    _log('Starting remote forward: ${rule.remoteHost}:${rule.remotePort} → ${rule.localHost}:${rule.localPort}');
+    final remoteForward = await client.forwardRemote(
+      host: rule.remoteHost,
+      port: rule.remotePort,
+    );
+    if (remoteForward == null) {
+      throw SshException(SshErrorKind.unknown, 'Remote forward request rejected by server.');
+    }
+
+    final subscription = remoteForward.connections.listen((channel) async {
+      try {
+        final socket = await Socket.connect(rule.localHost, rule.localPort);
+        socket.listen(
+          (data) => channel.sink.add(data),
+          onDone: () => channel.sink.close(),
+          onError: (_) => channel.sink.close(),
+        );
+        channel.stream.listen(
+          (data) => socket.add(data),
+          onDone: () => socket.destroy(),
+          onError: (_) => socket.destroy(),
+        );
+      } catch (e) {
+        _log('Remote forward connection error: $e');
+      }
+    });
+
+    final forward = ActivePortForward(
+      rule: rule,
+      stop: () async {
+        await subscription.cancel();
+        remoteForward.close();
+      },
+    );
+    _activeForwards.add(forward);
+    _log('Remote forward active: ${rule.remoteHost}:${rule.remotePort}');
+    return forward;
+  }
+
+  /// Stops a specific port forward.
+  Future<void> stopForward(ActivePortForward forward) async {
+    await forward.stop();
+    forward.active = false;
+    _activeForwards.remove(forward);
+    _log('Stopped forward: ${forward.rule}');
+  }
+
   Future<void> disconnect() async {
+    // Stop all active forwards
+    for (final forward in _activeForwards.toList()) {
+      await forward.stop();
+      forward.active = false;
+    }
+    _activeForwards.clear();
     if (_client == null) {
       _setStatus(SshConnectionStatus.disconnected);
       return;
@@ -527,6 +692,16 @@ class _DartSshClientAdapter implements SshClientAdapter {
 
   @override
   Future<SftpClient> openSftp() async => _client.sftp();
+
+  @override
+  Future<SSHForwardChannel> forwardLocal(String remoteHost, int remotePort) async {
+    return _client.forwardLocal(remoteHost, remotePort);
+  }
+
+  @override
+  Future<SSHRemoteForward?> forwardRemote({required String host, required int port}) async {
+    return _client.forwardRemote(host: host, port: port);
+  }
 
   @override
   Future<SshShellSession> startShell({SshPtyConfig ptyConfig = const SshPtyConfig()}) async {
