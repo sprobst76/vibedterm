@@ -27,6 +27,9 @@ class SyncManager {
     SyncConfig? config,
   }) : _config = config ?? const SyncConfig(serverUrl: '');
 
+  /// Called after a successful pull overwrites the local vault file.
+  VoidCallback? onVaultPulled;
+
   SyncConfig _config;
   SyncApiClient? _apiClient;
   AuthService? _authService;
@@ -245,6 +248,11 @@ class SyncManager {
       _syncService!.setLocalRevision(result.newRevision!);
     }
 
+    // Notify listeners if server vault was pulled (local file was overwritten)
+    if (result.action == SyncAction.pulled) {
+      onVaultPulled?.call();
+    }
+
     return result;
   }
 
@@ -286,6 +294,9 @@ class SyncManager {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_localRevisionKey, response.revision);
     _syncService!.setLocalRevision(response.revision);
+
+    // Notify listeners that local vault was overwritten
+    onVaultPulled?.call();
   }
 
   /// Set local vault revision (call after vault changes).

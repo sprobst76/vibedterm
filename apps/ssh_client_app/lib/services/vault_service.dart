@@ -62,6 +62,9 @@ class VaultService implements VaultServiceInterface {
   VaultService();
 
   final _uuid = const Uuid();
+
+  /// Called after every vault save — used to trigger auto-sync.
+  VoidCallback? onVaultSaved;
   static const _lastPathKey = 'vibedterm.lastVaultPath';
   static const _lastPasswordKey = 'vibedterm.lastVaultPassword';
   final _secureStorage = const FlutterSecureStorage();
@@ -78,6 +81,22 @@ class VaultService implements VaultServiceInterface {
   );
 
   VaultFile? _current;
+
+  /// Saves the vault and notifies listeners (for auto-sync).
+  Future<void> _saveAndNotify() async {
+    await _current!.save();
+    onVaultSaved?.call();
+  }
+
+  /// Reloads the vault from disk (e.g. after a server pull overwrites the file).
+  Future<void> reloadFromDisk() async {
+    if (_current == null) return;
+    final path = _current!.file.path;
+    final password = _sessionPasswords[path] ?? _savedPassword;
+    if (password == null) return;
+    _current = await VaultFile.open(file: File(path), password: password);
+    state.value = state.value.copyWith(status: VaultStatus.unlocked);
+  }
 
   @override
   bool get isUnlocked => _current != null;
@@ -315,7 +334,7 @@ class VaultService implements VaultServiceInterface {
     );
     try {
       _current!.upsertHost(host);
-      await _current!.save();
+      await _saveAndNotify();
       state.value = state.value.copyWith(
         status: VaultStatus.unlocked,
         message: 'Host added.',
@@ -354,7 +373,7 @@ class VaultService implements VaultServiceInterface {
     );
     try {
       _current!.upsertIdentity(identity);
-      await _current!.save();
+      await _saveAndNotify();
       state.value = state.value.copyWith(
         status: VaultStatus.unlocked,
         message: 'Identity added.',
@@ -372,7 +391,7 @@ class VaultService implements VaultServiceInterface {
     if (_current == null) return;
     try {
       _current!.upsertHost(updated);
-      await _current!.save();
+      await _saveAndNotify();
       state.value = state.value.copyWith(
         status: VaultStatus.unlocked,
         message: 'Host updated.',
@@ -389,7 +408,7 @@ class VaultService implements VaultServiceInterface {
   Future<void> deleteHost(String hostId) async {
     if (_current == null) return;
     _current!.removeHost(hostId);
-    await _current!.save();
+    await _saveAndNotify();
     state.value = state.value.copyWith(
       status: VaultStatus.unlocked,
       message: 'Host deleted.',
@@ -401,7 +420,7 @@ class VaultService implements VaultServiceInterface {
     if (_current == null) return;
     try {
       _current!.upsertIdentity(updated);
-      await _current!.save();
+      await _saveAndNotify();
       state.value = state.value.copyWith(
         status: VaultStatus.unlocked,
         message: 'Identity updated.',
@@ -418,7 +437,7 @@ class VaultService implements VaultServiceInterface {
   Future<void> deleteIdentity(String identityId) async {
     if (_current == null) return;
     _current!.removeIdentity(identityId);
-    await _current!.save();
+    await _saveAndNotify();
     state.value = state.value.copyWith(
       status: VaultStatus.unlocked,
       message: 'Identity deleted.',
@@ -449,7 +468,7 @@ class VaultService implements VaultServiceInterface {
     );
     try {
       _current!.upsertSnippet(snippet);
-      await _current!.save();
+      await _saveAndNotify();
       state.value = state.value.copyWith(
         status: VaultStatus.unlocked,
         message: 'Snippet added.',
@@ -467,7 +486,7 @@ class VaultService implements VaultServiceInterface {
     if (_current == null) return;
     try {
       _current!.upsertSnippet(updated);
-      await _current!.save();
+      await _saveAndNotify();
       state.value = state.value.copyWith(
         status: VaultStatus.unlocked,
         message: 'Snippet updated.',
@@ -484,7 +503,7 @@ class VaultService implements VaultServiceInterface {
   Future<void> deleteSnippet(String snippetId) async {
     if (_current == null) return;
     _current!.removeSnippet(snippetId);
-    await _current!.save();
+    await _saveAndNotify();
     state.value = state.value.copyWith(
       status: VaultStatus.unlocked,
       message: 'Snippet deleted.',
@@ -502,7 +521,7 @@ class VaultService implements VaultServiceInterface {
     }
     try {
       _current!.updateSettings(settings);
-      await _current!.save();
+      await _saveAndNotify();
       state.value = state.value.copyWith(
         status: VaultStatus.unlocked,
         message: 'Settings updated.',
@@ -571,7 +590,7 @@ class VaultService implements VaultServiceInterface {
       (key, value) => MapEntry(key, value.toList()),
     );
     _current!.updateMeta(meta);
-    await _current!.save();
+    await _saveAndNotify();
     state.value = state.value.copyWith(
       status: VaultStatus.unlocked,
       message: 'Host key trusted for $host.',
@@ -595,7 +614,7 @@ class VaultService implements VaultServiceInterface {
       (key, value) => MapEntry(key, value.toList()),
     );
     _current!.updateMeta(meta);
-    await _current!.save();
+    await _saveAndNotify();
     state.value = state.value.copyWith(
       status: VaultStatus.unlocked,
       message: 'Removed trusted key for $host.',
@@ -612,7 +631,7 @@ class VaultService implements VaultServiceInterface {
       (key, value) => MapEntry(key, value.toList()),
     );
     _current!.updateMeta(meta);
-    await _current!.save();
+    await _saveAndNotify();
     state.value = state.value.copyWith(
       status: VaultStatus.unlocked,
       message: 'Removed trusted keys for $host.',

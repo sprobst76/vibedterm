@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:core_sync/core_sync.dart';
@@ -26,16 +27,34 @@ class VibedTermApp extends StatefulWidget {
 class _VibedTermAppState extends State<VibedTermApp> {
   final _vaultService = VaultService();
   final _syncManager = SyncManager();
+  Timer? _syncDebounce;
 
   @override
   void initState() {
     super.initState();
     _vaultService.init();
     _syncManager.init();
+
+    // Auto-sync: push to server after vault changes (debounced)
+    _vaultService.onVaultSaved = _onVaultSaved;
+
+    // Auto-reload: refresh in-memory vault after server pull
+    _syncManager.onVaultPulled = () => _vaultService.reloadFromDisk();
+  }
+
+  void _onVaultSaved() {
+    _syncDebounce?.cancel();
+    _syncDebounce = Timer(const Duration(seconds: 2), () {
+      final path = _vaultService.currentPath;
+      if (path != null && _syncManager.isAuthenticated) {
+        _syncManager.syncVault(vaultFilePath: path);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _syncDebounce?.cancel();
     _syncManager.dispose();
     super.dispose();
   }

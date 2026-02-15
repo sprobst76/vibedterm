@@ -2,6 +2,10 @@
 
 ## Recently Completed
 
+- [x] tmux quick-switch popup with one-click session switching
+- [x] Fix session manager dialog to use runCommand for session listing
+- [x] File modularity: Split large files (core_vault, main, terminal_screen) into modules
+- [x] Fix all analyzer warnings across ui_terminal and minimal apps
 - [x] Keyboard shortcuts: Ctrl+Tab/Shift+Tab for tab cycling, Ctrl+1-9 direct access, Ctrl+T new connection, Ctrl+W close tab
 - [x] Snippets UI: Full CRUD in Hosts screen, snippet picker in terminal status bar
 - [x] Android extra-key row: Scrollable bar with arrows, Ctrl combos, navigation, special characters
@@ -30,7 +34,7 @@
 
 ### High Priority
 
-- [ ] **tmux session list auto-refresh**: Parse terminal output for session list
+- [x] **tmux session list auto-refresh**: Session manager dialog refreshes every 3s
 
 ### Medium Priority
 
@@ -38,6 +42,11 @@
 - [ ] **SFTP file browser**: Browse and transfer files via SFTP
 - [ ] **Search in terminal**: Find text in terminal output
 - [ ] **Split panes**: Multiple terminals in one tab
+- [ ] **Port forwarding UI**: Local/Remote port forwarding with GUI
+- [ ] **SSH agent forwarding**: Forward SSH agent for Git operations on remote servers
+- [ ] **Host groups/folders**: Organize hosts in folders as list grows
+- [ ] **Quick-connect bar**: Type `user@host` directly without creating a host entry
+- [ ] **Drag & drop file transfer**: Drop files onto terminal for automatic scp/sftp upload
 
 ### Low Priority
 
@@ -46,6 +55,9 @@
 - [ ] **Cloud sync**: Implement `core_sync` for OneDrive/Google Drive vault sync
 - [ ] **iOS/macOS support**: Add Apple platform targets
 - [ ] **Localization**: Multi-language support
+- [ ] **Terminal font preview**: Font preview in terminal settings
+- [ ] **Export/Import vault**: Export hosts and identities as encrypted backup
+- [ ] **Connection health indicator**: Latency display in status bar (ping time)
 
 ## Known Issues
 

@@ -82,17 +82,29 @@ class _TmuxSessionManagerDialog extends StatefulWidget {
 }
 
 class _TmuxSessionManagerDialogState extends State<_TmuxSessionManagerDialog> {
+  static const _refreshInterval = Duration(seconds: 3);
+
   List<TmuxSession>? _sessions;
   bool _loading = true;
   String? _error;
   final _newSessionController = TextEditingController();
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadSessions();
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) => _refreshSessions());
   }
 
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _newSessionController.dispose();
+    super.dispose();
+  }
+
+  /// Initial load with loading indicator.
   Future<void> _loadSessions() async {
     setState(() {
       _loading = true;
@@ -112,6 +124,21 @@ class _TmuxSessionManagerDialogState extends State<_TmuxSessionManagerDialog> {
         _loading = false;
         _error = e.toString();
       });
+    }
+  }
+
+  /// Silent refresh without loading indicator — updates list in place.
+  Future<void> _refreshSessions() async {
+    if (_loading) return;
+    try {
+      final sessions = await widget.tab.listTmuxSessions();
+      if (!mounted) return;
+      setState(() {
+        _sessions = sessions;
+        _error = null;
+      });
+    } catch (_) {
+      // Silent failure on auto-refresh — don't disturb the UI
     }
   }
 
