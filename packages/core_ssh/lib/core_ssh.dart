@@ -41,6 +41,9 @@ import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:meta/meta.dart';
 
+export 'package:dartssh2/dartssh2.dart'
+    show SftpClient, SftpFileAttrs, SftpName, SftpFileOpenMode, SftpFile;
+
 // =============================================================================
 // Connection Target
 // =============================================================================
@@ -267,6 +270,9 @@ abstract class SshClientAdapter {
   /// Starts an interactive shell session.
   Future<SshShellSession> startShell({SshPtyConfig ptyConfig});
 
+  /// Opens an SFTP session for file operations.
+  Future<SftpClient> openSftp();
+
   /// Disconnects and cleans up resources.
   Future<void> disconnect();
 }
@@ -355,6 +361,18 @@ class SshConnectionManager {
       );
     }
     return client.startShell(ptyConfig: ptyConfig);
+  }
+
+  Future<SftpClient> openSftp() async {
+    final client = _client;
+    if (client == null) {
+      throw SshException(
+        SshErrorKind.disconnected,
+        'Not connected.',
+      );
+    }
+    _log('Opening SFTP session...');
+    return client.openSftp();
   }
 
   Future<void> disconnect() async {
@@ -506,6 +524,9 @@ class _DartSshClientAdapter implements SshClientAdapter {
       exitCode: session.exitCode,
     );
   }
+
+  @override
+  Future<SftpClient> openSftp() async => _client.sftp();
 
   @override
   Future<SshShellSession> startShell({SshPtyConfig ptyConfig = const SshPtyConfig()}) async {

@@ -20,6 +20,7 @@ class _HomeShellState extends State<HomeShell> {
     _PageConfig('Vault', Icons.lock_outline),
     _PageConfig('Hosts', Icons.dns_outlined),
     _PageConfig('Terminal', Icons.terminal),
+    _PageConfig('Files', Icons.folder_outlined),
   ];
 
   void _setIndex(int value) {
@@ -110,9 +111,9 @@ class _HomeShellState extends State<HomeShell> {
           bottomNavigationBar: isWide
               ? null
               : NavigationBar(
-                  selectedIndex: _index < 3 ? _index : 0,
+                  selectedIndex: _index < _pages.length ? _index : 0,
                   onDestinationSelected: (idx) {
-                    if (idx == 3) {
+                    if (idx == _pages.length) {
                       _showSettingsDialog();
                     } else {
                       _setIndex(idx);
@@ -148,6 +149,7 @@ class _HomeShellState extends State<HomeShell> {
             onConnectHost: _handleConnectHost,
           ),
           TerminalScreen(service: _vaultService),
+          SftpScreen(service: _vaultService),
         ],
       ),
     );

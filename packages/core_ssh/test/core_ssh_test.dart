@@ -87,6 +87,11 @@ class _FakeAdapter implements SshClientAdapter {
       StreamController<List<int>>.broadcast();
 
   @override
+  Future<SftpClient> openSftp() async {
+    throw SshException(SshErrorKind.unknown, 'SFTP not supported in tests');
+  }
+
+  @override
   Future<void> disconnect() async {
     if (!_shellOut.isClosed) {
       await _shellOut.close();

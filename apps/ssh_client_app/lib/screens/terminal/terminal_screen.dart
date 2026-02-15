@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:core_ssh/core_ssh.dart';
 import 'package:core_vault/core_vault.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ui_terminal/ui_terminal.dart';
@@ -42,6 +44,7 @@ class TerminalPanelState extends State<TerminalPanel>
   TabController? _tabController;
   final Map<String, Set<String>> _trustedHostKeys = {};
   bool _showLogs = false;
+  bool _isDragging = false;
   late final VoidCallback _vaultListener;
   final _quickConnectController = TextEditingController();
 
@@ -87,15 +90,48 @@ class TerminalPanelState extends State<TerminalPanel>
     return Focus(
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
-      child: Container(
-        color: termTheme.background,
-        child: Column(
+      child: DropTarget(
+        onDragDone: (details) => _handleFileDrop(details),
+        onDragEntered: (_) => setState(() => _isDragging = true),
+        onDragExited: (_) => setState(() => _isDragging = false),
+        child: Stack(
           children: [
-            _buildTabBar(termTheme),
-            Expanded(child: _buildTerminalArea(termTheme)),
-            if (_isMobilePlatform(context)) _buildExtraKeyRow(termTheme),
-            _buildStatusBar(termTheme),
-            if (_showLogs) _buildLogsDrawer(termTheme),
+            Container(
+              color: termTheme.background,
+              child: Column(
+                children: [
+                  _buildTabBar(termTheme),
+                  Expanded(child: _buildTerminalArea(termTheme)),
+                  if (_isMobilePlatform(context)) _buildExtraKeyRow(termTheme),
+                  _buildStatusBar(termTheme),
+                  if (_showLogs) _buildLogsDrawer(termTheme),
+                ],
+              ),
+            ),
+            if (_isDragging)
+              Positioned.fill(
+                child: Container(
+                  color: termTheme.cyan.withValues(alpha: 0.15),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_upload,
+                            size: 64, color: termTheme.cyan),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Drop files to upload via SFTP',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: termTheme.foreground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -1012,6 +1048,48 @@ class TerminalPanelState extends State<TerminalPanel>
     final text = data?.text;
     if (text == null || text.isEmpty) return;
     await tab!.session!.writeString(text);
+  }
+
+  Future<void> _handleFileDrop(DropDoneDetails details) async {
+    final tab = _activeTab;
+    if (tab == null || tab.status != TabConnectionStatus.connected) {
+      _showMessage('No active connection for file upload.');
+      return;
+    }
+
+    try {
+      final sftp = await tab.getSftpClient();
+
+      // Get current remote directory
+      String remotePath;
+      try {
+        final result = await tab.manager.runCommand('pwd');
+        remotePath = result.stdout.trim();
+        if (remotePath.isEmpty) remotePath = '/tmp';
+      } catch (_) {
+        remotePath = '/tmp';
+      }
+
+      for (final xFile in details.files) {
+        final localFile = File(xFile.path);
+        final fileName = xFile.name;
+        final fullRemotePath = '$remotePath/$fileName';
+
+        _showMessage('Uploading $fileName...');
+
+        final data = await localFile.readAsBytes();
+        final remoteFile = await sftp.open(fullRemotePath,
+            mode: SftpFileOpenMode.create |
+                SftpFileOpenMode.write |
+                SftpFileOpenMode.truncate);
+        await remoteFile.writeBytes(data);
+        await remoteFile.close();
+
+        _showMessage('Uploaded $fileName to $remotePath');
+      }
+    } catch (e) {
+      _showMessage('Upload failed: $e');
+    }
   }
 
   Future<void> _showSnippetPicker() async {

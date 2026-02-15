@@ -25,6 +25,7 @@ class _ConnectionTab {
   final FocusNode focusNode;
 
   SshShellSession? session;
+  SftpClient? _sftpClient;
   TabConnectionStatus status = TabConnectionStatus.disconnected;
   final List<String> logs = [];
 
@@ -367,6 +368,12 @@ class _ConnectionTab {
     _onStatusChange?.call();
   }
 
+  /// Returns a lazily-initialized SFTP client for this connection.
+  Future<SftpClient> getSftpClient() async {
+    _sftpClient ??= await manager.openSftp();
+    return _sftpClient!;
+  }
+
   /// Switches from the current tmux session to a different one.
   Future<void> switchTmuxSession(String targetSession) async {
     final shellSession = session;
@@ -384,6 +391,8 @@ class _ConnectionTab {
     unawaited(_logSub?.cancel());
     bridge.onOutput = null;
     bridge.onResize = null;
+    _sftpClient?.close();
+    _sftpClient = null;
     unawaited(session?.close());
     unawaited(manager.disconnect());
     manager.dispose();
