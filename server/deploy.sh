@@ -54,7 +54,7 @@ if [ ! -f .env ]; then
 
     echo -e "${GREEN}✓ Generated secure POSTGRES_PASSWORD${NC}"
     echo -e "${GREEN}✓ Generated secure JWT_SECRET${NC}"
-    echo -e "${GREEN}✓ Domain set to example.com${NC}"
+    echo -e "${GREEN}✓ Domain set to your-domain.com${NC}"
     echo ""
     echo -e "${YELLOW}Please edit .env to set:${NC}"
     echo "  - ADMIN_EMAIL"
