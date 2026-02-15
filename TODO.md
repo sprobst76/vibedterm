@@ -1,6 +1,6 @@
 # TODO & Roadmap
 
-## Recently Completed
+## Completed in v0.4.0
 
 - [x] User settings web UI: Registration, login, password change, 2FA management, device list
 - [x] Admin create user: Pre-approved user creation from admin interface
@@ -13,30 +13,27 @@
 - [x] Quick-connect bar: Type `user@host:port` directly in tab bar
 - [x] Auto-sync: Debounced vault sync to server after every mutation
 - [x] Vault reload from disk after server pull
-- [x] tmux session list auto-refresh (3s timer in session manager dialog)
-- [x] tmux quick-switch popup with one-click session switching
-- [x] Fix session manager dialog to use runCommand for session listing
-- [x] File modularity: Split large files (core_vault, main, terminal_screen) into modules
-- [x] Fix all analyzer warnings across ui_terminal and minimal apps
-- [x] Keyboard shortcuts: Ctrl+Tab/Shift+Tab for tab cycling, Ctrl+1-9 direct access, Ctrl+T new connection, Ctrl+W close tab
-- [x] Snippets UI: Full CRUD in Hosts screen, snippet picker in terminal status bar
-- [x] Android extra-key row: Scrollable bar with arrows, Ctrl combos, navigation, special characters
-- [x] Fix all 36 analyzer warnings (deprecated APIs, unused imports, dead code)
-- [x] Terminal theme customization (12 themes)
-- [x] App-wide theming based on terminal theme
-- [x] tmux auto-attach on connection
-- [x] tmux session picker when multiple sessions exist
-- [x] tmux session manager UI
-- [x] Show tmux session name in tab header
-- [x] New vertical sidebar UI
-- [x] Custom app icon
-- [x] Settings dialog with Appearance and SSH tabs
+- [x] Template refactor: Per-page template sets to prevent layout collisions
+
+## Completed in v0.3.0
+
+- [x] Keyboard shortcuts: Ctrl+Tab/Shift+Tab, Ctrl+1-9, Ctrl+T, Ctrl+W
+- [x] Snippets UI: Full CRUD in Hosts screen, snippet picker in terminal
+- [x] Android extra-key row: Scrollable bar with 22 keys
+- [x] Fix all 36 analyzer warnings
+- [x] File modularity: Split large files into focused modules
+
+## Completed in v0.2.0
+
+- [x] Terminal themes (12 themes) with app-wide theming
+- [x] tmux integration: auto-attach, session picker, session manager, tab labels
+- [x] Vertical sidebar UI with settings dialog
 - [x] SSH settings (keepalive, timeout, default port)
-- [x] Apply SSH keepalive settings to actual connections
 - [x] Auto-reconnect with exponential backoff
-- [x] Import SSH keys from ~/.ssh
-- [x] Key fingerprint display for identities
-- [x] Reconnect button for disconnected tabs
+- [x] Import SSH keys from ~/.ssh with fingerprint display
+
+## Completed in v0.1.0
+
 - [x] Multi-tab terminal with independent connections
 - [x] Password and key authentication
 - [x] Encrypted vault with auto-unlock
