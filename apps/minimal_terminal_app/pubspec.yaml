@@ -13,5 +13,10 @@ dependencies:
   core_ssh:
     path: ../../packages/core_ssh
 
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  lints: ^3.0.0
+
 flutter:
   uses-material-design: true

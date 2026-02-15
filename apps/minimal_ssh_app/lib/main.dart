@@ -15,9 +15,9 @@ class MinimalSshApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: 'Minimal SSH App',
-      home: const Scaffold(
+      home: Scaffold(
         body: SafeArea(child: SshPage()),
       ),
     );
@@ -83,7 +83,7 @@ class _SshPageState extends State<SshPage> {
         privateKey: keyPem,
       );
 
-      _appendLine('Connecting to ${username}@${host}:$port...');
+      _appendLine('Connecting to $username@$host:$port...');
       await _mgr.connect(target);
       _appendLine('Connected. Starting shell...');
       _session = await _mgr.startShell();
@@ -116,11 +116,12 @@ class _SshPageState extends State<SshPage> {
     setState(() {
       _lines.add(s);
       // Also write to terminal renderer for visual parity
-      _terminal.write(s + '\r\n');
+      _terminal.write('$s\r\n');
       // scroll later
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients)
+        if (_scroll.hasClients) {
           _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
       });
     });
   }
@@ -131,7 +132,7 @@ class _SshPageState extends State<SshPage> {
       return;
     }
     try {
-      await _session!.writeString(text + '\r');
+      await _session!.writeString('$text\r');
       _inputController.clear();
     } catch (e) {
       _appendLine('Write error: $e');
@@ -181,7 +182,7 @@ class _SshPageState extends State<SshPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         final overlay = Overlay.of(context);
-        overlay?.insert(_inputOverlay!);
+        overlay.insert(_inputOverlay!);
         _focusNode.requestFocus();
       } catch (_) {}
     });
@@ -200,8 +201,8 @@ class _SshPageState extends State<SshPage> {
   Widget build(BuildContext context) {
     return Focus(
       focusNode: _focusNode,
-      onKey: (node, event) {
-        if (event is RawKeyDownEvent) {
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
           if (event.logicalKey == LogicalKeyboardKey.enter) {
             _session?.writeString('\r');
             return KeyEventResult.handled;

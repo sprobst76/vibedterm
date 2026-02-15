@@ -52,9 +52,9 @@ class TerminalThemeConverter {
       surfaceContainerLow:
           Color.lerp(termTheme.background, termTheme.foreground, 0.02)!,
       surfaceContainerLowest: termTheme.background,
-      onSurfaceVariant: termTheme.foreground.withOpacity(0.7),
-      outline: termTheme.foreground.withOpacity(0.3),
-      outlineVariant: termTheme.foreground.withOpacity(0.15),
+      onSurfaceVariant: termTheme.foreground.withValues(alpha:0.7),
+      outline: termTheme.foreground.withValues(alpha:0.3),
+      outlineVariant: termTheme.foreground.withValues(alpha:0.15),
       shadow: Colors.black,
       scrim: Colors.black,
       inverseSurface: termTheme.foreground,
@@ -80,23 +80,23 @@ class TerminalThemeConverter {
             Color.lerp(termTheme.background, termTheme.foreground, 0.03),
         selectedIconTheme: IconThemeData(color: termTheme.cyan),
         unselectedIconTheme:
-            IconThemeData(color: termTheme.foreground.withOpacity(0.6)),
+            IconThemeData(color: termTheme.foreground.withValues(alpha:0.6)),
         selectedLabelTextStyle:
             TextStyle(color: termTheme.cyan, fontWeight: FontWeight.w600),
         unselectedLabelTextStyle:
-            TextStyle(color: termTheme.foreground.withOpacity(0.6)),
-        indicatorColor: termTheme.cyan.withOpacity(0.2),
+            TextStyle(color: termTheme.foreground.withValues(alpha:0.6)),
+        indicatorColor: termTheme.cyan.withValues(alpha:0.2),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor:
             Color.lerp(termTheme.background, termTheme.foreground, 0.05),
-        indicatorColor: termTheme.cyan.withOpacity(0.2),
+        indicatorColor: termTheme.cyan.withValues(alpha:0.2),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return IconThemeData(color: termTheme.cyan);
           }
           return IconThemeData(
-              color: termTheme.foreground.withOpacity(0.6));
+              color: termTheme.foreground.withValues(alpha:0.6));
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -106,7 +106,7 @@ class TerminalThemeConverter {
                 fontSize: 12);
           }
           return TextStyle(
-              color: termTheme.foreground.withOpacity(0.6), fontSize: 12);
+              color: termTheme.foreground.withValues(alpha:0.6), fontSize: 12);
         }),
       ),
       cardTheme: CardThemeData(
@@ -115,7 +115,7 @@ class TerminalThemeConverter {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: termTheme.foreground.withOpacity(0.1)),
+          side: BorderSide(color: termTheme.foreground.withValues(alpha:0.1)),
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -126,10 +126,10 @@ class TerminalThemeConverter {
             fontSize: 20,
             fontWeight: FontWeight.w600),
         contentTextStyle:
-            TextStyle(color: termTheme.foreground.withOpacity(0.8)),
+            TextStyle(color: termTheme.foreground.withValues(alpha:0.8)),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: termTheme.foreground.withOpacity(0.1)),
+          side: BorderSide(color: termTheme.foreground.withValues(alpha:0.1)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -139,21 +139,21 @@ class TerminalThemeConverter {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide:
-              BorderSide(color: termTheme.foreground.withOpacity(0.2)),
+              BorderSide(color: termTheme.foreground.withValues(alpha:0.2)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide:
-              BorderSide(color: termTheme.foreground.withOpacity(0.2)),
+              BorderSide(color: termTheme.foreground.withValues(alpha:0.2)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: termTheme.cyan, width: 2),
         ),
         labelStyle:
-            TextStyle(color: termTheme.foreground.withOpacity(0.7)),
+            TextStyle(color: termTheme.foreground.withValues(alpha:0.7)),
         hintStyle:
-            TextStyle(color: termTheme.foreground.withOpacity(0.4)),
+            TextStyle(color: termTheme.foreground.withValues(alpha:0.4)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -179,11 +179,11 @@ class TerminalThemeConverter {
         ),
       ),
       iconTheme:
-          IconThemeData(color: termTheme.foreground.withOpacity(0.8)),
+          IconThemeData(color: termTheme.foreground.withValues(alpha:0.8)),
       dividerTheme:
-          DividerThemeData(color: termTheme.foreground.withOpacity(0.1)),
+          DividerThemeData(color: termTheme.foreground.withValues(alpha:0.1)),
       listTileTheme: ListTileThemeData(
-        iconColor: termTheme.foreground.withOpacity(0.7),
+        iconColor: termTheme.foreground.withValues(alpha:0.7),
         textColor: termTheme.foreground,
       ),
       snackBarTheme: SnackBarThemeData(
@@ -196,7 +196,7 @@ class TerminalThemeConverter {
         backgroundColor: Color.lerp(
             termTheme.background, termTheme.foreground, 0.08),
         labelStyle: TextStyle(color: termTheme.foreground),
-        side: BorderSide(color: termTheme.foreground.withOpacity(0.2)),
+        side: BorderSide(color: termTheme.foreground.withValues(alpha:0.2)),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: Color.lerp(
@@ -204,7 +204,7 @@ class TerminalThemeConverter {
         textStyle: TextStyle(color: termTheme.foreground),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: termTheme.foreground.withOpacity(0.1)),
+          side: BorderSide(color: termTheme.foreground.withValues(alpha:0.1)),
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
@@ -227,11 +227,11 @@ class TerminalThemeConverter {
         bodyLarge: TextStyle(color: termTheme.foreground),
         bodyMedium: TextStyle(color: termTheme.foreground),
         bodySmall:
-            TextStyle(color: termTheme.foreground.withOpacity(0.7)),
+            TextStyle(color: termTheme.foreground.withValues(alpha:0.7)),
         labelLarge: TextStyle(color: termTheme.foreground),
         labelMedium: TextStyle(color: termTheme.foreground),
         labelSmall:
-            TextStyle(color: termTheme.foreground.withOpacity(0.7)),
+            TextStyle(color: termTheme.foreground.withValues(alpha:0.7)),
       ),
     );
   }

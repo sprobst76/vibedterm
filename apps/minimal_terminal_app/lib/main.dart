@@ -16,9 +16,9 @@ class MinimalTerminalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: 'Minimal Terminal',
-      home: const Scaffold(
+      home: Scaffold(
         body: SafeArea(child: TerminalPage()),
       ),
     );
@@ -40,7 +40,6 @@ class _TerminalPageState extends State<TerminalPage> {
   final FocusNode _inputFocus = FocusNode();
   final FocusNode _outerFocus = FocusNode();
   OverlayEntry? _inputOverlay;
-  bool _composing = false;
   String _currentBuffer = '';
 
   @override
@@ -68,14 +67,17 @@ class _TerminalPageState extends State<TerminalPage> {
     super.dispose();
   }
 
-  void _handleRawKey(RawKeyEvent event) {
-    if (event is! RawKeyDownEvent) return;
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+    final ctrl = HardwareKeyboard.instance.isControlPressed;
+    final alt = HardwareKeyboard.instance.isAltPressed;
+    final meta = HardwareKeyboard.instance.isMetaPressed;
     _debug(
-        'RawKeyEvent: runtimeType=${event.runtimeType}, logical=${event.logicalKey.debugName}, keyId=${event.logicalKey.keyId}, char=${event.character}, ctrl=${event.isControlPressed}, alt=${event.isAltPressed}, meta=${event.isMetaPressed}');
+        'KeyEvent: runtimeType=${event.runtimeType}, logical=${event.logicalKey.debugName}, keyId=${event.logicalKey.keyId}, char=${event.character}, ctrl=$ctrl, alt=$alt, meta=$meta');
 
     // Handle common control sequences
     // Ctrl+C
-    if (event.isControlPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (ctrl && event.logicalKey == LogicalKeyboardKey.keyC) {
       _debug('Ctrl+C pressed');
       if (_shellSession != null) {
         _shellSession!.writeString('\x03');
@@ -203,7 +205,7 @@ class _TerminalPageState extends State<TerminalPage> {
   Future<void> _tryConnectFromConfig() async {
     try {
       _debug('trying to locate config.json');
-      String _findConfigPath() {
+      String findConfigPath() {
         final base = Directory.current.path.replaceAll('\\', '/');
         final candidates = <String>{};
         candidates.add('$base/config.json');
@@ -223,7 +225,7 @@ class _TerminalPageState extends State<TerminalPage> {
         return '$base/config.json';
       }
 
-      final cfgPath = _findConfigPath();
+      final cfgPath = findConfigPath();
       _debug('config path resolved to: $cfgPath');
       final cfgFile = File(cfgPath);
       if (!cfgFile.existsSync()) {
@@ -279,7 +281,7 @@ class _TerminalPageState extends State<TerminalPage> {
       _terminal.write('Connected, starting shell...\r\n');
       _debug('connected — starting shell');
       _shellSession = await _connManager!
-          .startShell(ptyConfig: SshPtyConfig(width: 80, height: 24));
+          .startShell(ptyConfig: const SshPtyConfig(width: 80, height: 24));
 
       _shellSession!.stdout.listen((data) {
         _debug('stdout chunk length=${data.length}');
@@ -319,12 +321,12 @@ class _TerminalPageState extends State<TerminalPage> {
 
   @override
   Widget build(BuildContext context) {
-    return RawKeyboardListener(
+    return KeyboardListener(
       focusNode: _outerFocus,
-      onKey: (e) => _handleRawKey(e),
+      onKeyEvent: (e) => _handleKeyEvent(e),
       child: Stack(
         children: [
-          Expanded(
+          Positioned.fill(
             child: Container(
               color: Colors.black,
               child: Listener(
@@ -339,7 +341,7 @@ class _TerminalPageState extends State<TerminalPage> {
                       final text = data?.text ?? '';
                       if (text.isNotEmpty) {
                         if (_shellSession != null) {
-                          _shellSession!.writeString(text);
+                          await _shellSession!.writeString(text);
                         } else {
                           _terminal.write(text);
                         }
@@ -367,7 +369,8 @@ class _TerminalPageState extends State<TerminalPage> {
                         ];
                         for (final name in tries) {
                           try {
-                            final res = (t as dynamic).__get ?? null;
+                            // ignore: unused_local_variable
+                            final res = (t as dynamic).__get;
                             // Try using dynamic invocation by name
                             dynamic val;
                             try {
@@ -402,8 +405,8 @@ class _TerminalPageState extends State<TerminalPage> {
                             } catch (_) {}
                             try {
                               final maybe = (val as dynamic).toString();
-                              if (maybe != null && maybe.isNotEmpty) {
-                                selected = maybe as String;
+                              if (maybe.isNotEmpty) {
+                                selected = maybe;
                                 _debug('selection via $name.toString()');
                                 break;
                               }
