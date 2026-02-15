@@ -544,7 +544,7 @@ class TerminalPanelState extends State<TerminalPanel>
           IconButton(
             icon: Icon(Icons.grid_view, size: 18, color: iconColor),
             tooltip: 'tmux sessions',
-            onPressed: hasSession ? () => _showTmuxManager(tab!) : null,
+            onPressed: hasSession ? () => _showTmuxQuickSwitch(tab!) : null,
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
@@ -1204,6 +1204,132 @@ class TerminalPanelState extends State<TerminalPanel>
     );
   }
 
+  Future<void> _showTmuxQuickSwitch(_ConnectionTab tab) async {
+    final sessions = await tab.listTmuxSessions();
+    if (!mounted) return;
+
+    final termTheme = _currentTerminalTheme;
+    final textColor = termTheme.foreground;
+    final currentSession = tab.attachedTmuxSession;
+
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    // Position near the tmux icon in the status bar
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(Offset(button.size.width - 200, 0),
+            ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero),
+            ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    final result = await showMenu<String>(
+      context: context,
+      position: position,
+      items: [
+        // Header
+        const PopupMenuItem<String>(
+          enabled: false,
+          child: Text(
+            'tmux Sessions',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        const PopupMenuDivider(),
+        // Session list
+        ...sessions.map((s) {
+          final isCurrent = s.name == currentSession;
+          return PopupMenuItem<String>(
+            value: s.name,
+            child: Row(
+              children: [
+                Icon(
+                  isCurrent ? Icons.check_circle : Icons.grid_view,
+                  size: 16,
+                  color: isCurrent ? Colors.green : textColor.withValues(alpha: 0.6),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    s.name,
+                    style: isCurrent
+                        ? const TextStyle(fontWeight: FontWeight.bold)
+                        : null,
+                  ),
+                ),
+                Text(
+                  '${s.windows}w',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: textColor.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        if (sessions.isNotEmpty) const PopupMenuDivider(),
+        // New session
+        const PopupMenuItem<String>(
+          value: '_new',
+          child: Row(
+            children: [
+              Icon(Icons.add, size: 16),
+              SizedBox(width: 8),
+              Text('New session'),
+            ],
+          ),
+        ),
+        // Detach
+        if (currentSession != null)
+          const PopupMenuItem<String>(
+            value: '_detach',
+            child: Row(
+              children: [
+                Icon(Icons.logout, size: 16),
+                SizedBox(width: 8),
+                Text('Detach'),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        // Full manager
+        const PopupMenuItem<String>(
+          value: '_manager',
+          child: Row(
+            children: [
+              Icon(Icons.settings, size: 16),
+              SizedBox(width: 8),
+              Text('Session Manager...'),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (result == null || !mounted) return;
+
+    switch (result) {
+      case '_new':
+        await _executeTmuxAction(tab, TmuxAction.newSession, null);
+      case '_detach':
+        await _executeTmuxAction(tab, TmuxAction.detach, null);
+      case '_manager':
+        _showTmuxManager(tab);
+      default:
+        // Switch to selected session
+        if (result != currentSession) {
+          await _executeTmuxAction(tab, TmuxAction.switchSession, result);
+        }
+    }
+
+    if (mounted) setState(() {});
+  }
+
   void _showTmuxManager(_ConnectionTab tab) {
     showDialog(
       context: context,
@@ -1237,6 +1363,7 @@ class TerminalPanelState extends State<TerminalPanel>
       case TmuxAction.detach:
         // Send Ctrl+B, d to detach from current tmux session
         await session.writeString('\x02d');
+        tab.attachedTmuxSession = null;
         tab.logs.add('Sent tmux detach (Ctrl+B, d)');
         return;
       case TmuxAction.newSession:
@@ -1248,6 +1375,10 @@ class TerminalPanelState extends State<TerminalPanel>
         if (sessionName == null) return;
         cmd = 'tmux kill-session -t $sessionName';
         break;
+      case TmuxAction.switchSession:
+        if (sessionName == null) return;
+        await tab.switchTmuxSession(sessionName);
+        return;
     }
 
     tab.logs.add('Executing: $cmd');

@@ -367,6 +367,17 @@ class _ConnectionTab {
     _onStatusChange?.call();
   }
 
+  /// Switches from the current tmux session to a different one.
+  Future<void> switchTmuxSession(String targetSession) async {
+    final shellSession = session;
+    if (shellSession == null) return;
+
+    _addLog('Switching tmux session to: $targetSession');
+    await shellSession.writeString('tmux switch-client -t $targetSession\n');
+    attachedTmuxSession = targetSession;
+    _onStatusChange?.call();
+  }
+
   Future<void> dispose() async {
     _userDisconnected = true; // Prevent auto-reconnect
     unawaited(_statusSub?.cancel());

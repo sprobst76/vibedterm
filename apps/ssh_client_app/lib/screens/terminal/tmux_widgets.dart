@@ -4,7 +4,7 @@ part of 'terminal_screen.dart';
 // tmux Session Manager
 // -----------------------------------------------------------------------------
 
-enum TmuxAction { attach, detach, newSession, killSession }
+enum TmuxAction { attach, detach, newSession, killSession, switchSession }
 
 /// Represents a parsed tmux session from `tmux list-sessions` output.
 class TmuxSession {
@@ -100,26 +100,14 @@ class _TmuxSessionManagerDialogState extends State<_TmuxSessionManagerDialog> {
     });
 
     try {
-      final session = widget.tab.session;
-      if (session == null) {
-        setState(() {
-          _loading = false;
-          _error = 'No active session';
-        });
-        return;
-      }
-
-      // Clear some buffer space and send command
-      await session.writeString('tmux list-sessions 2>&1\n');
-
-      // Wait for output
-      await Future.delayed(const Duration(milliseconds: 500));
-
+      final sessions = await widget.tab.listTmuxSessions();
+      if (!mounted) return;
       setState(() {
         _loading = false;
-        _sessions = []; // Placeholder - real parsing would happen here
+        _sessions = sessions;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = e.toString();
@@ -270,8 +258,7 @@ class _TmuxSessionManagerDialogState extends State<_TmuxSessionManagerDialog> {
             Icon(Icons.grid_view, size: 48, color: Colors.grey.shade400),
             const SizedBox(height: 8),
             const Text(
-              'Use "tmux list-sessions" to see sessions.\n'
-              'Session list auto-detection coming soon.',
+              'No active tmux sessions found.',
               textAlign: TextAlign.center,
             ),
           ],
@@ -279,29 +266,45 @@ class _TmuxSessionManagerDialogState extends State<_TmuxSessionManagerDialog> {
       );
     }
 
+    final currentSession = widget.tab.attachedTmuxSession;
+
     return ListView.builder(
       itemCount: sessions.length,
       itemBuilder: (context, index) {
         final session = sessions[index];
+        final isCurrent = session.name == currentSession;
         return ListTile(
           leading: Icon(
-            session.attached ? Icons.visibility : Icons.grid_view,
-            color: session.attached ? Colors.green : null,
+            isCurrent
+                ? Icons.check_circle
+                : session.attached
+                    ? Icons.visibility
+                    : Icons.grid_view,
+            color: isCurrent
+                ? Colors.green
+                : session.attached
+                    ? Colors.orange
+                    : null,
           ),
-          title: Text(session.name),
+          title: Text(
+            session.name,
+            style: isCurrent
+                ? const TextStyle(fontWeight: FontWeight.bold)
+                : null,
+          ),
           subtitle: Text(
             '${session.windows} window${session.windows > 1 ? 's' : ''}'
-            '${session.attached ? ' (attached)' : ''}',
+            '${isCurrent ? ' (current)' : session.attached ? ' (attached)' : ''}',
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (!session.attached)
+              if (!isCurrent)
                 IconButton(
-                  icon: const Icon(Icons.login),
-                  tooltip: 'Attach',
+                  icon: const Icon(Icons.swap_horiz),
+                  tooltip: 'Switch to session',
                   onPressed: () => widget.onSessionAction(
-                    TmuxAction.attach,
+                    TmuxAction.switchSession,
                     session.name,
                   ),
                 ),
