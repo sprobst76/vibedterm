@@ -2,6 +2,8 @@
 
 ## Recently Completed
 
+- [x] Host groups/folders: Organize hosts in collapsible folder sections
+- [x] Tailscale node discovery: Scan and import Tailscale peers as hosts
 - [x] SFTP file browser with directory navigation, upload/download, delete, new folder
 - [x] Drag & drop file upload on SFTP browser and terminal (desktop_drop)
 - [x] Quick-connect bar: Type `user@host:port` directly in tab bar
@@ -45,7 +47,6 @@
 - [ ] **Split panes**: Multiple terminals in one tab
 - [ ] **Port forwarding UI**: Local/Remote port forwarding with GUI
 - [ ] **SSH agent forwarding**: Forward SSH agent for Git operations on remote servers
-- [ ] **Host groups/folders**: Organize hosts in folders as list grows
 
 ### Low Priority
 
