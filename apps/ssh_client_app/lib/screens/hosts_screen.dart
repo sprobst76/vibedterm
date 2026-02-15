@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/tailscale_service.dart';
 import '../services/vault_service.dart';
 
 class HostsScreen extends StatelessWidget {
@@ -58,6 +59,12 @@ class HostsScreen extends StatelessWidget {
                   icon: const Icon(Icons.add),
                   label: const Text('Add host'),
                 ),
+                if (!Platform.isAndroid && !Platform.isIOS)
+                  OutlinedButton.icon(
+                    onPressed: () => _promptTailscaleDiscover(context),
+                    icon: const Icon(Icons.radar),
+                    label: const Text('Discover Tailscale'),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () => _promptAddSnippet(context),
                   icon: const Icon(Icons.code),
@@ -138,37 +145,7 @@ class HostsScreen extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            ...data.hosts.map(
-              (host) => Card(
-                child: ListTile(
-                  leading: const Icon(Icons.dns_outlined),
-                  title: Text(host.label),
-                  subtitle: Text(
-                    '${host.hostname}:${host.port} • ${host.username}'
-                    '${host.identityId != null ? ' • key: ${host.identityId}' : ''}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () =>
-                            _promptAddHost(context, existing: host),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => service.deleteHost(host.id),
-                      ),
-                      IconButton(
-                        tooltip: 'Connect',
-                        icon: const Icon(Icons.play_arrow),
-                        onPressed: () => _connectHost(host),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            ..._buildGroupedHosts(context, data),
             const SizedBox(height: 16),
             Text(
               'Snippets (${data.snippets.length})',
@@ -247,6 +224,79 @@ class HostsScreen extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  List<Widget> _buildGroupedHosts(BuildContext context, VaultData data) {
+    final groups = data.hosts
+        .map((h) => h.group)
+        .whereType<String>()
+        .toSet()
+        .toList()
+      ..sort();
+    final ungrouped = data.hosts.where((h) => h.group == null).toList();
+    final widgets = <Widget>[];
+
+    for (final groupName in groups) {
+      final groupHosts =
+          data.hosts.where((h) => h.group == groupName).toList();
+      widgets.add(
+        ExpansionTile(
+          title: Text('$groupName (${groupHosts.length})'),
+          initiallyExpanded: true,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+          children:
+              groupHosts.map((h) => _buildHostCard(context, h)).toList(),
+        ),
+      );
+    }
+
+    if (ungrouped.isNotEmpty) {
+      if (groups.isNotEmpty) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 4, bottom: 4),
+            child: Text(
+              'Ungrouped',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        );
+      }
+      widgets.addAll(ungrouped.map((h) => _buildHostCard(context, h)));
+    }
+
+    return widgets;
+  }
+
+  Widget _buildHostCard(BuildContext context, VaultHost host) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.dns_outlined),
+        title: Text(host.label),
+        subtitle: Text(
+          '${host.hostname}:${host.port} • ${host.username}'
+          '${host.identityId != null ? ' • key: ${host.identityId}' : ''}',
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => _promptAddHost(context, existing: host),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: () => service.deleteHost(host.id),
+            ),
+            IconButton(
+              tooltip: 'Connect',
+              icon: const Icon(Icons.play_arrow),
+              onPressed: () => _connectHost(host),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -348,7 +398,19 @@ class HostsScreen extends StatelessWidget {
     final tmuxSessionController =
         TextEditingController(text: existing?.tmuxSessionName ?? '');
     String? selectedIdentityId = existing?.identityId;
+    String? selectedGroup = existing?.group;
+    bool creatingNewGroup = false;
+    final newGroupController = TextEditingController();
     bool tmuxEnabled = existing?.tmuxEnabled ?? false;
+
+    // Derive existing groups from vault data
+    final existingGroups = (service.currentData?.hosts
+            .map((h) => h.group)
+            .whereType<String>()
+            .toSet()
+            .toList() ??
+        <String>[])
+      ..sort();
 
     final result = await showDialog<bool>(
       context: context,
@@ -402,6 +464,53 @@ class HostsScreen extends StatelessWidget {
                         },
                       ),
                     ],
+                    const SizedBox(height: 8),
+                    InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Group'),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          value: creatingNewGroup ? '__new__' : selectedGroup,
+                          isDense: true,
+                          isExpanded: true,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('No group'),
+                            ),
+                            ...existingGroups.map(
+                              (g) => DropdownMenuItem<String?>(
+                                value: g,
+                                child: Text(g),
+                              ),
+                            ),
+                            const DropdownMenuItem<String?>(
+                              value: '__new__',
+                              child: Text('New group...'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setDialogState(() {
+                              if (value == '__new__') {
+                                creatingNewGroup = true;
+                                selectedGroup = null;
+                              } else {
+                                creatingNewGroup = false;
+                                selectedGroup = value;
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    if (creatingNewGroup)
+                      TextField(
+                        controller: newGroupController,
+                        decoration: const InputDecoration(
+                          labelText: 'New group name',
+                          hintText: 'e.g. Production, Tailscale',
+                        ),
+                        autofocus: true,
+                      ),
                     const SizedBox(height: 16),
                     const Divider(),
                     CheckboxListTile(
@@ -443,6 +552,11 @@ class HostsScreen extends StatelessWidget {
     if (result != true) return;
     final port = int.tryParse(portController.text) ?? 22;
     final tmuxSession = tmuxSessionController.text.trim();
+    final effectiveGroup = creatingNewGroup
+        ? (newGroupController.text.trim().isEmpty
+            ? null
+            : newGroupController.text.trim())
+        : selectedGroup;
     if (existing == null) {
       await service.addHost(
         label: labelController.text.trim(),
@@ -450,6 +564,7 @@ class HostsScreen extends StatelessWidget {
         port: port,
         username: userController.text.trim(),
         identityId: selectedIdentityId,
+        group: effectiveGroup,
         tmuxEnabled: tmuxEnabled,
         tmuxSessionName: tmuxSession.isEmpty ? null : tmuxSession,
       );
@@ -461,6 +576,8 @@ class HostsScreen extends StatelessWidget {
           port: port,
           username: userController.text.trim(),
           identityId: selectedIdentityId,
+          group: effectiveGroup,
+          clearGroup: effectiveGroup == null,
           tmuxEnabled: tmuxEnabled,
           tmuxSessionName: tmuxSession.isEmpty ? null : tmuxSession,
         ),
@@ -721,6 +838,80 @@ class HostsScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _promptTailscaleDiscover(BuildContext context) async {
+    final result = await discoverTailscaleNodes();
+    if (result.error != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.error!)),
+        );
+      }
+      return;
+    }
+    if (result.nodes.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No Tailscale peers found')),
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    final existingHostnames =
+        service.currentData?.hosts.map((h) => h.hostname).toSet() ?? {};
+    final defaultUsername = Platform.environment['USER'] ??
+        Platform.environment['USERNAME'] ??
+        'root';
+
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _TailscaleDiscoverDialog(
+        nodes: result.nodes,
+        existingHostnames: existingHostnames,
+        defaultUsername: defaultUsername,
+      ),
+    );
+
+    if (selected == null) return;
+
+    final nodes = selected['nodes'] as List<TailscaleNode>;
+    final username = selected['username'] as String;
+    final useMagicDns = selected['useMagicDns'] as bool;
+
+    int imported = 0;
+    for (final node in nodes) {
+      try {
+        final hostname = useMagicDns && node.dnsName.isNotEmpty
+            ? node.dnsName.endsWith('.')
+                ? node.dnsName.substring(0, node.dnsName.length - 1)
+                : node.dnsName
+            : node.preferredAddress;
+        await service.addHost(
+          label: node.hostName,
+          hostname: hostname,
+          port: 22,
+          username: username,
+          group: 'Tailscale',
+        );
+        imported++;
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to import ${node.hostName}: $e')),
+          );
+        }
+      }
+    }
+
+    if (context.mounted && imported > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imported $imported Tailscale node(s)')),
+      );
+    }
+  }
+
   void _connectHost(VaultHost host) {
     VaultIdentity? identity;
     for (final id
@@ -845,6 +1036,182 @@ class _ImportSshKeysDialogState extends State<_ImportSshKeysDialog> {
                   Navigator.of(context).pop(selectedKeys);
                 },
           child: Text('Import ${_selected.length} key(s)'),
+        ),
+      ],
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Tailscale Node Discovery
+// -----------------------------------------------------------------------------
+
+class _TailscaleDiscoverDialog extends StatefulWidget {
+  const _TailscaleDiscoverDialog({
+    required this.nodes,
+    required this.existingHostnames,
+    required this.defaultUsername,
+  });
+
+  final List<TailscaleNode> nodes;
+  final Set<String> existingHostnames;
+  final String defaultUsername;
+
+  @override
+  State<_TailscaleDiscoverDialog> createState() =>
+      _TailscaleDiscoverDialogState();
+}
+
+class _TailscaleDiscoverDialogState extends State<_TailscaleDiscoverDialog> {
+  final Set<int> _selected = {};
+  late final TextEditingController _usernameController;
+  bool _showOffline = false;
+  bool _useMagicDns = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _usernameController = TextEditingController(text: widget.defaultUsername);
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    super.dispose();
+  }
+
+  List<TailscaleNode> get _filteredNodes => _showOffline
+      ? widget.nodes
+      : widget.nodes.where((n) => n.online).toList();
+
+  bool _isAlreadyImported(TailscaleNode node) {
+    return widget.existingHostnames.contains(node.preferredAddress) ||
+        (node.dnsName.isNotEmpty &&
+            widget.existingHostnames.contains(
+              node.dnsName.endsWith('.')
+                  ? node.dnsName.substring(0, node.dnsName.length - 1)
+                  : node.dnsName,
+            ));
+  }
+
+  IconData _osIcon(String os) {
+    switch (os.toLowerCase()) {
+      case 'linux':
+        return Icons.terminal;
+      case 'windows':
+        return Icons.desktop_windows;
+      case 'macos':
+      case 'darwin':
+        return Icons.laptop_mac;
+      case 'android':
+        return Icons.phone_android;
+      case 'ios':
+        return Icons.phone_iphone;
+      default:
+        return Icons.devices;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filteredNodes;
+    return AlertDialog(
+      title: const Text('Discover Tailscale Nodes'),
+      content: SizedBox(
+        width: 500,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _usernameController,
+              decoration: const InputDecoration(labelText: 'SSH Username'),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                FilterChip(
+                  label: const Text('Show offline'),
+                  selected: _showOffline,
+                  onSelected: (v) => setState(() {
+                    _showOffline = v;
+                    _selected.clear();
+                  }),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text('Use MagicDNS'),
+                  selected: _useMagicDns,
+                  onSelected: (v) => setState(() => _useMagicDns = v),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${filtered.length} node(s) found',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final node = filtered[index];
+                  final alreadyExists = _isAlreadyImported(node);
+                  return CheckboxListTile(
+                    value: _selected.contains(index),
+                    onChanged: alreadyExists
+                        ? null
+                        : (value) {
+                            setState(() {
+                              if (value == true) {
+                                _selected.add(index);
+                              } else {
+                                _selected.remove(index);
+                              }
+                            });
+                          },
+                    title: Text(node.hostName),
+                    subtitle: Text(
+                      alreadyExists
+                          ? 'Already imported'
+                          : '${node.os} • ${node.preferredAddress}',
+                      style: TextStyle(
+                        color: alreadyExists
+                            ? Theme.of(context).colorScheme.outline
+                            : null,
+                      ),
+                    ),
+                    secondary: Icon(
+                      _osIcon(node.os),
+                      color: node.online ? Colors.green : Colors.grey,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _selected.isEmpty
+              ? null
+              : () {
+                  final selectedNodes =
+                      _selected.map((i) => filtered[i]).toList();
+                  Navigator.of(context).pop({
+                    'nodes': selectedNodes,
+                    'username': _usernameController.text.trim(),
+                    'useMagicDns': _useMagicDns,
+                  });
+                },
+          child: Text('Import ${_selected.length} node(s)'),
         ),
       ],
     );

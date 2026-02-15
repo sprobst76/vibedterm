@@ -133,6 +133,7 @@ class TestVaultService implements VaultServiceInterface {
     int port = 22,
     required String username,
     String? identityId,
+    String? group,
     bool tmuxEnabled = false,
     String? tmuxSessionName,
   }) async {

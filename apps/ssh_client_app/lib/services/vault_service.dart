@@ -309,6 +309,7 @@ class VaultService implements VaultServiceInterface {
     int port = 22,
     required String username,
     String? identityId,
+    String? group,
     bool tmuxEnabled = false,
     String? tmuxSessionName,
   }) async {
@@ -327,6 +328,7 @@ class VaultService implements VaultServiceInterface {
       port: port,
       username: username,
       identityId: identityId,
+      group: group,
       tmuxEnabled: tmuxEnabled,
       tmuxSessionName: tmuxSessionName,
       createdAt: now,

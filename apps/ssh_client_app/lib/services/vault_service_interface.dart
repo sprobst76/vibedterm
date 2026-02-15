@@ -105,6 +105,7 @@ abstract class VaultServiceInterface {
     int port,
     required String username,
     String? identityId,
+    String? group,
     bool tmuxEnabled,
     String? tmuxSessionName,
   });

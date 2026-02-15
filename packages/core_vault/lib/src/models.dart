@@ -355,6 +355,7 @@ class VaultHost {
     this.port = 22,
     required this.username,
     this.identityId,
+    this.group,
     this.tags = const <String>[],
     this.tmuxEnabled = false,
     this.tmuxSessionName,
@@ -380,6 +381,9 @@ class VaultHost {
   /// Optional reference to a [VaultIdentity.id] for key-based authentication.
   final String? identityId;
 
+  /// Optional group/folder name for organizing hosts.
+  final String? group;
+
   /// Optional tags for categorization and filtering.
   final List<String> tags;
 
@@ -402,6 +406,7 @@ class VaultHost {
         'port': port,
         'username': username,
         if (identityId != null) 'identityId': identityId,
+        if (group != null) 'group': group,
         if (tags.isNotEmpty) 'tags': tags,
         if (tmuxEnabled) 'tmuxEnabled': tmuxEnabled,
         if (tmuxSessionName != null) 'tmuxSessionName': tmuxSessionName,
@@ -417,6 +422,7 @@ class VaultHost {
       port: (json['port'] ?? 22) as int,
       username: json['username'] as String,
       identityId: json['identityId'] as String?,
+      group: json['group'] as String?,
       tags: (json['tags'] as List?)?.cast<String>() ?? const <String>[],
       tmuxEnabled: (json['tmuxEnabled'] as bool?) ?? false,
       tmuxSessionName: json['tmuxSessionName'] as String?,
@@ -431,6 +437,8 @@ class VaultHost {
     int? port,
     String? username,
     String? identityId,
+    String? group,
+    bool clearGroup = false,
     List<String>? tags,
     bool? tmuxEnabled,
     String? tmuxSessionName,
@@ -444,6 +452,7 @@ class VaultHost {
       port: port ?? this.port,
       username: username ?? this.username,
       identityId: identityId ?? this.identityId,
+      group: clearGroup ? null : (group ?? this.group),
       tags: tags ?? this.tags,
       tmuxEnabled: tmuxEnabled ?? this.tmuxEnabled,
       tmuxSessionName: tmuxSessionName ?? this.tmuxSessionName,
