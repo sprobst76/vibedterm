@@ -39,6 +39,18 @@
 - [x] Encrypted vault with auto-unlock
 - [x] Host key verification and trust management
 
+## To Test
+
+- [ ] `/register` — User-Registrierung über Web, dann Admin-Approval
+- [ ] `/account/login` — User-Login (inkl. TOTP falls aktiviert)
+- [ ] `/account/settings` — Passwort ändern, 2FA-Status, Geräteliste
+- [ ] `/account/settings/totp` — 2FA deaktivieren (Passwort + Code)
+- [ ] `/account/devices` — Geräte anzeigen und entfernen
+- [ ] `/admin/users/create` — Admin erstellt User (auto-approved)
+- [ ] App-Sync: Server-URL konfigurieren → Login → Vault sync
+- [ ] App-Sync: Auto-sync nach Vault-Änderung
+- [ ] App-Sync: Konflikt-Erkennung und -Auflösung (Keep Local / Use Server)
+
 ## Planned
 
 ### Medium Priority
