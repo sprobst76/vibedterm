@@ -50,6 +50,8 @@ class _WebViewTerminalViewState extends State<WebViewTerminalView> {
         await rootBundle.loadString('packages/ui_terminal/assets/xterm.css');
     final fitJs = await rootBundle
         .loadString('packages/ui_terminal/assets/xterm-addon-fit.js');
+    final searchJs = await rootBundle
+        .loadString('packages/ui_terminal/assets/xterm-addon-search.js');
 
     // Inline the JS and CSS into the HTML to avoid cross-origin issues
     final inlinedHtml = html
@@ -64,6 +66,10 @@ class _WebViewTerminalViewState extends State<WebViewTerminalView> {
         .replaceFirst(
           '<script src="xterm-addon-fit.js"></script>',
           '<script>$fitJs</script>',
+        )
+        .replaceFirst(
+          '<script src="xterm-addon-search.js"></script>',
+          '<script>$searchJs</script>',
         );
 
     if (mounted) {

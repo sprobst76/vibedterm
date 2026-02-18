@@ -13,6 +13,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   String? _lastMessage;
+  final _tabIndexNotifier = ValueNotifier<int>(0);
 
   VaultService get _vaultService => widget.service;
 
@@ -27,6 +28,7 @@ class _HomeShellState extends State<HomeShell> {
     setState(() {
       _index = value;
     });
+    _tabIndexNotifier.value = value;
   }
 
   @override
@@ -148,7 +150,7 @@ class _HomeShellState extends State<HomeShell> {
             service: _vaultService,
             onConnectHost: _handleConnectHost,
           ),
-          TerminalScreen(service: _vaultService),
+          TerminalScreen(service: _vaultService, tabIndexNotifier: _tabIndexNotifier),
           SftpScreen(service: _vaultService),
         ],
       ),

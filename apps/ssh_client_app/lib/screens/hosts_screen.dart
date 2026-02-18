@@ -402,6 +402,9 @@ class HostsScreen extends StatelessWidget {
     bool creatingNewGroup = false;
     final newGroupController = TextEditingController();
     bool tmuxEnabled = existing?.tmuxEnabled ?? false;
+    String? hostnameError;
+    String? usernameError;
+    String? portError;
 
     // Derive existing groups from vault data
     final existingGroups = (service.currentData?.hosts
@@ -430,16 +433,40 @@ class HostsScreen extends StatelessWidget {
                     ),
                     TextField(
                       controller: hostController,
-                      decoration: const InputDecoration(labelText: 'Hostname'),
+                      decoration: InputDecoration(
+                        labelText: 'Hostname',
+                        errorText: hostnameError,
+                      ),
+                      onChanged: (_) {
+                        if (hostnameError != null) {
+                          setDialogState(() => hostnameError = null);
+                        }
+                      },
                     ),
                     TextField(
                       controller: portController,
-                      decoration: const InputDecoration(labelText: 'Port'),
+                      decoration: InputDecoration(
+                        labelText: 'Port',
+                        errorText: portError,
+                      ),
                       keyboardType: TextInputType.number,
+                      onChanged: (_) {
+                        if (portError != null) {
+                          setDialogState(() => portError = null);
+                        }
+                      },
                     ),
                     TextField(
                       controller: userController,
-                      decoration: const InputDecoration(labelText: 'Username'),
+                      decoration: InputDecoration(
+                        labelText: 'Username',
+                        errorText: usernameError,
+                      ),
+                      onChanged: (_) {
+                        if (usernameError != null) {
+                          setDialogState(() => usernameError = null);
+                        }
+                      },
                     ),
                     if (service.currentData?.identities.isNotEmpty ??
                         false) ...[
@@ -539,7 +566,45 @@ class HostsScreen extends StatelessWidget {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () {
+                    final hostname = hostController.text.trim();
+                    final username = userController.text.trim();
+                    final portText = portController.text.trim();
+                    final portVal = int.tryParse(portText);
+                    bool hasError = false;
+
+                    String? newHostnameError;
+                    String? newUsernameError;
+                    String? newPortError;
+
+                    if (hostname.isEmpty) {
+                      newHostnameError = 'Hostname is required';
+                      hasError = true;
+                    } else if (!RegExp(r'^[a-zA-Z0-9._\-:]+$').hasMatch(hostname)) {
+                      newHostnameError = 'Invalid hostname';
+                      hasError = true;
+                    }
+
+                    if (username.isEmpty) {
+                      newUsernameError = 'Username is required';
+                      hasError = true;
+                    }
+
+                    if (portText.isNotEmpty && (portVal == null || portVal < 1 || portVal > 65535)) {
+                      newPortError = 'Port must be 1-65535';
+                      hasError = true;
+                    }
+
+                    if (hasError) {
+                      setDialogState(() {
+                        hostnameError = newHostnameError;
+                        usernameError = newUsernameError;
+                        portError = newPortError;
+                      });
+                      return;
+                    }
+                    Navigator.of(context).pop(true);
+                  },
                   child: const Text('Save'),
                 ),
               ],

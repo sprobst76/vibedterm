@@ -24,3 +24,4 @@ flutter:
     - assets/xterm.js
     - assets/xterm.css
     - assets/xterm-addon-fit.js
+    - assets/xterm-addon-search.js

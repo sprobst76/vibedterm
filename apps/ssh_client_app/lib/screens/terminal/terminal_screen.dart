@@ -17,20 +17,22 @@ part 'terminal_widgets.dart';
 part 'tmux_widgets.dart';
 
 class TerminalScreen extends StatelessWidget {
-  const TerminalScreen({super.key, required this.service});
+  const TerminalScreen({super.key, required this.service, this.tabIndexNotifier});
 
   final VaultServiceInterface service;
+  final ValueNotifier<int>? tabIndexNotifier;
 
   @override
   Widget build(BuildContext context) {
-    return TerminalPanel(service: service);
+    return TerminalPanel(service: service, tabIndexNotifier: tabIndexNotifier);
   }
 }
 
 class TerminalPanel extends StatefulWidget {
-  const TerminalPanel({super.key, required this.service});
+  const TerminalPanel({super.key, required this.service, this.tabIndexNotifier});
 
   final VaultServiceInterface service;
+  final ValueNotifier<int>? tabIndexNotifier;
 
   @override
   State<TerminalPanel> createState() => TerminalPanelState();
@@ -48,7 +50,6 @@ class TerminalPanelState extends State<TerminalPanel>
   bool _showSearchBar = false;
   final _searchController = TextEditingController();
   late final VoidCallback _vaultListener;
-  final _quickConnectController = TextEditingController();
 
   @override
   void initState() {
@@ -59,14 +60,21 @@ class TerminalPanelState extends State<TerminalPanel>
       }
     };
     widget.service.state.addListener(_vaultListener);
+    widget.tabIndexNotifier?.addListener(_onTabIndexChanged);
     _refreshTrustedKeys();
     _maybeApplyPendingHost();
+  }
+
+  void _onTabIndexChanged() {
+    if (widget.tabIndexNotifier?.value == 2) {
+      _maybeApplyPendingHost();
+    }
   }
 
   @override
   void dispose() {
     widget.service.state.removeListener(_vaultListener);
-    _quickConnectController.dispose();
+    widget.tabIndexNotifier?.removeListener(_onTabIndexChanged);
     for (final tab in _tabs) {
       tab.dispose();
     }
@@ -269,58 +277,10 @@ class TerminalPanelState extends State<TerminalPanel>
                     ),
                   ),
           ),
-          // Quick-connect bar
-          SizedBox(
-            width: 200,
-            height: 34,
-            child: TextField(
-              controller: _quickConnectController,
-              style: TextStyle(fontSize: 13, color: textColor),
-              decoration: InputDecoration(
-                hintText: 'user@host:port',
-                hintStyle: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.4)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: textColor.withValues(alpha: 0.2)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: textColor.withValues(alpha: 0.2)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: termTheme.cyan),
-                ),
-              ),
-              onSubmitted: (value) {
-                if (value.trim().isNotEmpty) {
-                  _quickConnect(value.trim());
-                } else {
-                  _showHostPicker();
-                }
-              },
-            ),
-          ),
           IconButton(
-            icon: Icon(
-              _quickConnectController.text.trim().isNotEmpty
-                  ? Icons.login
-                  : Icons.add,
-              color: iconColor,
-            ),
-            tooltip: _quickConnectController.text.trim().isNotEmpty
-                ? 'Quick connect'
-                : 'New connection',
-            onPressed: () {
-              final text = _quickConnectController.text.trim();
-              if (text.isNotEmpty) {
-                _quickConnect(text);
-              } else {
-                _showHostPicker();
-              }
-            },
+            icon: Icon(Icons.add, color: iconColor),
+            tooltip: 'New connection',
+            onPressed: _showHostPicker,
           ),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: iconColor),
@@ -884,49 +844,6 @@ class TerminalPanelState extends State<TerminalPanel>
   }
 
   /// Parses `user@host:port` into components. Returns null if invalid.
-  ({String username, String hostname, int port})? _parseQuickConnect(String input) {
-    final atIndex = input.indexOf('@');
-    if (atIndex < 1) return null; // No @ or empty username
-
-    final username = input.substring(0, atIndex);
-    final hostPart = input.substring(atIndex + 1);
-    if (hostPart.isEmpty) return null;
-
-    final colonIndex = hostPart.lastIndexOf(':');
-    if (colonIndex < 0) {
-      // No port specified
-      return (username: username, hostname: hostPart, port: 22);
-    }
-
-    final hostname = hostPart.substring(0, colonIndex);
-    final portStr = hostPart.substring(colonIndex + 1);
-    if (hostname.isEmpty) return null;
-
-    final port = int.tryParse(portStr);
-    if (port == null || port < 1 || port > 65535) return null;
-
-    return (username: username, hostname: hostname, port: port);
-  }
-
-  Future<void> _quickConnect(String input) async {
-    final parsed = _parseQuickConnect(input);
-    if (parsed == null) {
-      _showMessage('Invalid format. Use: user@host or user@host:port');
-      return;
-    }
-
-    final tempHost = VaultHost(
-      id: _uuid.v4(),
-      label: '${parsed.username}@${parsed.hostname}',
-      hostname: parsed.hostname,
-      port: parsed.port,
-      username: parsed.username,
-    );
-
-    _quickConnectController.clear();
-    await _connectToHost(tempHost);
-  }
-
   Future<void> _showHostPicker() async {
     final data = widget.service.currentData;
     if (data == null || data.hosts.isEmpty) {
