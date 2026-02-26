@@ -43,7 +43,7 @@ import 'package:meta/meta.dart';
 
 export 'package:dartssh2/dartssh2.dart'
     show SftpClient, SftpFileAttrs, SftpName, SftpFileOpenMode, SftpFile,
-         SSHForwardChannel, SSHRemoteForward;
+         SSHForwardChannel, SSHRemoteForward, SSHSocket;
 
 // =============================================================================
 // Connection Target
@@ -74,6 +74,7 @@ class SshTarget {
     this.passphrase,
     this.keepAliveInterval = const Duration(seconds: 10),
     this.onHostKeyVerify,
+    this.jumpSocket,
   });
 
   /// Target hostname or IP address.
@@ -102,6 +103,11 @@ class SshTarget {
   /// The callback receives the key type (e.g., "ssh-ed25519") and the
   /// fingerprint in colon-separated hex format.
   final FutureOr<bool> Function(String type, String fingerprint)? onHostKeyVerify;
+
+  /// Optional pre-established socket to use instead of opening a direct TCP
+  /// connection. Used for jump host tunneling: the socket is a forwarding
+  /// channel through the jump host to this target.
+  final SSHSocket? jumpSocket;
 }
 
 // =============================================================================
@@ -552,6 +558,55 @@ class SshConnectionManager {
     _log('Disconnected.');
   }
 
+  /// Creates an [SSHSocket] to [targetHost]:[targetPort] routed through [jumpTarget].
+  ///
+  /// Connects to the jump host, authenticates, opens a direct-tcpip channel
+  /// to [targetHost]:[targetPort], and returns a socket wrapping that channel.
+  /// The jump host connection is kept alive until the returned socket is closed.
+  static Future<SSHSocket> createJumpSocket({
+    required SshTarget jumpTarget,
+    required String targetHost,
+    required int targetPort,
+    required void Function(String) log,
+  }) async {
+    log('Jump: connecting to ${jumpTarget.username}@${jumpTarget.host}:${jumpTarget.port}...');
+    final jumpTcpSocket =
+        await SSHSocket.connect(jumpTarget.host, jumpTarget.port);
+
+    final identities = <SSHKeyPair>[];
+    if (jumpTarget.privateKey != null && jumpTarget.privateKey!.isNotEmpty) {
+      try {
+        identities.addAll(
+            SSHKeyPair.fromPem(jumpTarget.privateKey!, jumpTarget.passphrase));
+      } catch (e) {
+        log('Jump: failed to parse private key: $e');
+      }
+    }
+
+    final hasPassword =
+        jumpTarget.password != null && jumpTarget.password!.isNotEmpty;
+    final jumpClient = SSHClient(
+      jumpTcpSocket,
+      username: jumpTarget.username,
+      identities: identities.isEmpty ? null : identities,
+      onPasswordRequest: hasPassword ? () async => jumpTarget.password! : null,
+      onVerifyHostKey: jumpTarget.onHostKeyVerify == null
+          ? null
+          : (type, fp) async =>
+              jumpTarget.onHostKeyVerify!(type, _formatFingerprint(fp)),
+    );
+
+    log('Jump: authenticated. Opening tunnel to $targetHost:$targetPort...');
+    try {
+      final channel = await jumpClient.forwardLocal(targetHost, targetPort);
+      log('Jump: tunnel established.');
+      return _JumpSocket(channel, jumpClient);
+    } catch (e) {
+      jumpClient.close();
+      rethrow;
+    }
+  }
+
   void dispose() {
     _logController.close();
     _statusController.close();
@@ -612,7 +667,7 @@ Future<SshClientAdapter> _defaultClientFactory(
   SshTarget target,
   void Function(String message) log,
 ) async {
-  final socket = await SSHSocket.connect(target.host, target.port);
+  final socket = target.jumpSocket ?? await SSHSocket.connect(target.host, target.port);
   final identities = <SSHKeyPair>[];
   if (target.privateKey != null && target.privateKey!.isNotEmpty) {
     try {
@@ -651,6 +706,41 @@ String _formatFingerprint(Uint8List bytes) {
     buffer.write(bytes[i].toRadixString(16).padLeft(2, '0'));
   }
   return buffer.toString();
+}
+
+// -----------------------------------------------------------------------------
+// Jump Host Socket
+// -----------------------------------------------------------------------------
+
+/// Wraps an [SSHForwardChannel] as an [SSHSocket] while keeping the underlying
+/// jump host [SSHClient] alive. Both are closed when this socket is closed.
+class _JumpSocket implements SSHSocket {
+  _JumpSocket(this._channel, this._jumpClient);
+
+  final SSHForwardChannel _channel;
+  final SSHClient _jumpClient;
+
+  @override
+  Stream<Uint8List> get stream => _channel.stream;
+
+  @override
+  StreamSink<List<int>> get sink => _channel.sink;
+
+  @override
+  Future<void> get done => _channel.done;
+
+  @override
+  Future<void> close() async {
+    await _channel.close();
+    _jumpClient.close();
+    await _jumpClient.done.catchError((_) {});
+  }
+
+  @override
+  void destroy() {
+    _channel.destroy();
+    _jumpClient.close();
+  }
 }
 
 class _DartSshClientAdapter implements SshClientAdapter {

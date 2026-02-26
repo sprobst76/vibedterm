@@ -875,6 +875,26 @@ class TerminalPanelState extends State<TerminalPanel>
         hasKey: identity?.privateKey.isNotEmpty == true);
     if (password == null) return; // User cancelled
 
+    // Resolve jump host if configured
+    VaultHost? jumpHost;
+    VaultIdentity? jumpIdentity;
+    String? jumpPassword;
+    if (host.jumpHostId != null) {
+      jumpHost = widget.service.currentData?.hosts
+          .where((h) => h.id == host.jumpHostId)
+          .firstOrNull;
+      if (jumpHost != null) {
+        jumpIdentity = widget.service.currentData?.identities
+            .where((i) => i.id == jumpHost!.identityId)
+            .firstOrNull;
+        // Only prompt for password if the jump host has no key configured
+        if (jumpIdentity == null || jumpIdentity.privateKey.isEmpty) {
+          jumpPassword = await _promptForPassword(jumpHost, hasKey: false);
+          if (jumpPassword == null) return; // User cancelled
+        }
+      }
+    }
+
     // Create new tab
     final tab = _ConnectionTab(
       id: _uuid.v4(),
@@ -908,6 +928,9 @@ class TerminalPanelState extends State<TerminalPanel>
       keepAliveInterval:
           keepaliveSecs > 0 ? Duration(seconds: keepaliveSecs) : null,
       autoReconnect: autoReconnect,
+      jumpHost: jumpHost,
+      jumpIdentity: jumpIdentity,
+      jumpPassword: jumpPassword,
     );
 
     if (mounted) {

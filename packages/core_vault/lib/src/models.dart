@@ -355,6 +355,7 @@ class VaultHost {
     this.port = 22,
     required this.username,
     this.identityId,
+    this.jumpHostId,
     this.group,
     this.tags = const <String>[],
     this.tmuxEnabled = false,
@@ -381,6 +382,12 @@ class VaultHost {
   /// Optional reference to a [VaultIdentity.id] for key-based authentication.
   final String? identityId;
 
+  /// Optional reference to another [VaultHost.id] to use as an SSH jump host.
+  ///
+  /// When set, VibedTerm connects to this host first, then tunnels the
+  /// final SSH connection through it (ProxyJump / bastion host pattern).
+  final String? jumpHostId;
+
   /// Optional group/folder name for organizing hosts.
   final String? group;
 
@@ -406,6 +413,7 @@ class VaultHost {
         'port': port,
         'username': username,
         if (identityId != null) 'identityId': identityId,
+        if (jumpHostId != null) 'jumpHostId': jumpHostId,
         if (group != null) 'group': group,
         if (tags.isNotEmpty) 'tags': tags,
         if (tmuxEnabled) 'tmuxEnabled': tmuxEnabled,
@@ -422,6 +430,7 @@ class VaultHost {
       port: (json['port'] ?? 22) as int,
       username: json['username'] as String,
       identityId: json['identityId'] as String?,
+      jumpHostId: json['jumpHostId'] as String?,
       group: json['group'] as String?,
       tags: (json['tags'] as List?)?.cast<String>() ?? const <String>[],
       tmuxEnabled: (json['tmuxEnabled'] as bool?) ?? false,
@@ -437,6 +446,8 @@ class VaultHost {
     int? port,
     String? username,
     String? identityId,
+    String? jumpHostId,
+    bool clearJumpHost = false,
     String? group,
     bool clearGroup = false,
     List<String>? tags,
@@ -452,6 +463,7 @@ class VaultHost {
       port: port ?? this.port,
       username: username ?? this.username,
       identityId: identityId ?? this.identityId,
+      jumpHostId: clearJumpHost ? null : (jumpHostId ?? this.jumpHostId),
       group: clearGroup ? null : (group ?? this.group),
       tags: tags ?? this.tags,
       tmuxEnabled: tmuxEnabled ?? this.tmuxEnabled,

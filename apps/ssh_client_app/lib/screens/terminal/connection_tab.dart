@@ -48,10 +48,19 @@ class _ConnectionTab {
   Future<bool> Function(String, String, String)? _onHostKeyPrompt;
   Duration? _keepAliveInterval;
 
+  // Jump host params (stored for auto-reconnect)
+  VaultHost? _jumpHost;
+  VaultIdentity? _jumpIdentity;
+  String? _jumpPassword;
+
   String get label => attachedTmuxSession != null
       ? '${host.label} [$attachedTmuxSession]'
       : host.label;
-  String get connectionInfo => '${host.username}@${host.hostname}:${host.port}';
+  String get connectionInfo {
+    final base = '${host.username}@${host.hostname}:${host.port}';
+    final jh = _jumpHost;
+    return jh != null ? '$base via ${jh.label}' : base;
+  }
   bool get isReconnecting => _isReconnecting;
 
   void init({
@@ -77,17 +86,22 @@ class _ConnectionTab {
         onHostKeyPrompt,
     Duration? keepAliveInterval,
     bool autoReconnect = false,
+    VaultHost? jumpHost,
+    VaultIdentity? jumpIdentity,
+    String? jumpPassword,
   }) async {
     // Store params for potential reconnect
     _trustedKeys = trustedKeys;
     _onHostKeyPrompt = onHostKeyPrompt;
     _keepAliveInterval = keepAliveInterval;
     _autoReconnectEnabled = autoReconnect;
+    _jumpHost = jumpHost;
+    _jumpIdentity = jumpIdentity;
+    _jumpPassword = jumpPassword;
     _userDisconnected = false;
 
     status = TabConnectionStatus.connecting;
     _onStatusChange?.call();
-    bridge.write('Connecting to ${host.hostname}:${host.port}...\r\n');
 
     // Debug logging - also print to console
     final key = identity?.privateKey ?? '';
@@ -106,6 +120,47 @@ class _ConnectionTab {
     print('[SSH-DEBUG] Keepalive: ${keepAliveInterval?.inSeconds ?? 0}s');
     _addLog('Connecting: ${host.username}@${host.hostname}:${host.port}');
 
+    // Build jump socket if a jump host is configured
+    SSHSocket? jumpSocket;
+    if (jumpHost != null) {
+      bridge.write('Connecting via jump host: ${jumpHost.label}...\r\n');
+      _addLog('Jump: ${jumpHost.username}@${jumpHost.hostname}:${jumpHost.port}');
+      try {
+        jumpSocket = await SshConnectionManager.createJumpSocket(
+          jumpTarget: SshTarget(
+            host: jumpHost.hostname,
+            port: jumpHost.port,
+            username: jumpHost.username,
+            password:
+                jumpPassword?.isNotEmpty == true ? jumpPassword : null,
+            privateKey: jumpIdentity?.privateKey,
+            passphrase: jumpIdentity?.passphrase,
+            onHostKeyVerify: (type, fp) {
+              final trusted = trustedKeys[jumpHost.hostname];
+              if (trusted != null && trusted.contains(fp)) {
+                _addLog('Jump: host key known, auto-accepting');
+                return Future.value(true);
+              }
+              return onHostKeyPrompt(jumpHost.hostname, type, fp);
+            },
+          ),
+          targetHost: host.hostname,
+          targetPort: host.port,
+          log: _addLog,
+        );
+      } catch (e) {
+        status = TabConnectionStatus.error;
+        _onStatusChange?.call();
+        final msg = e is SshException ? e.message : e.toString();
+        bridge.write('\r\nJump host connection failed: $msg\r\n');
+        _addLog('Jump host connection failed: $msg');
+        return;
+      }
+      bridge.write('Tunnel open. Connecting to ${host.hostname}:${host.port}...\r\n');
+    } else {
+      bridge.write('Connecting to ${host.hostname}:${host.port}...\r\n');
+    }
+
     try {
       await manager.connect(
         SshTarget(
@@ -116,6 +171,7 @@ class _ConnectionTab {
           privateKey: identity?.privateKey,
           passphrase: identity?.passphrase,
           keepAliveInterval: keepAliveInterval,
+          jumpSocket: jumpSocket,
           onHostKeyVerify: (type, fp) => _handleHostKey(
             type,
             fp,
@@ -217,6 +273,34 @@ class _ConnectionTab {
 
     try {
       bridge.write('[Auto-reconnect] Connecting...\r\n');
+
+      // Re-create jump socket if needed
+      SSHSocket? jumpSocket;
+      final jh = _jumpHost;
+      if (jh != null) {
+        bridge.write('[Auto-reconnect] Reconnecting via jump host: ${jh.label}...\r\n');
+        final ji = _jumpIdentity;
+        final jp = _jumpPassword;
+        jumpSocket = await SshConnectionManager.createJumpSocket(
+          jumpTarget: SshTarget(
+            host: jh.hostname,
+            port: jh.port,
+            username: jh.username,
+            password: jp?.isNotEmpty == true ? jp : null,
+            privateKey: ji?.privateKey,
+            passphrase: ji?.passphrase,
+            onHostKeyVerify: (type, fp) {
+              final trusted = _trustedKeys![jh.hostname];
+              if (trusted != null && trusted.contains(fp)) return Future.value(true);
+              return _onHostKeyPrompt!(jh.hostname, type, fp);
+            },
+          ),
+          targetHost: host.hostname,
+          targetPort: host.port,
+          log: _addLog,
+        );
+      }
+
       await manager.connect(
         SshTarget(
           host: host.hostname,
@@ -226,6 +310,7 @@ class _ConnectionTab {
           privateKey: identity?.privateKey,
           passphrase: identity?.passphrase,
           keepAliveInterval: _keepAliveInterval,
+          jumpSocket: jumpSocket,
           onHostKeyVerify: (type, fp) => _handleHostKey(
             type,
             fp,

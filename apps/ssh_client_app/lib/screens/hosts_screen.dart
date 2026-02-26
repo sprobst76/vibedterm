@@ -398,6 +398,7 @@ class HostsScreen extends StatelessWidget {
     final tmuxSessionController =
         TextEditingController(text: existing?.tmuxSessionName ?? '');
     String? selectedIdentityId = existing?.identityId;
+    String? selectedJumpHostId = existing?.jumpHostId;
     String? selectedGroup = existing?.group;
     bool creatingNewGroup = false;
     final newGroupController = TextEditingController();
@@ -488,6 +489,35 @@ class HostsScreen extends StatelessWidget {
                         ],
                         onChanged: (value) {
                           selectedIdentityId = value;
+                        },
+                      ),
+                    ],
+                    // Jump host dropdown (only when other hosts exist)
+                    if ((service.currentData?.hosts
+                                .where((h) => h.id != existing?.id)
+                                .isNotEmpty ??
+                            false)) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String?>(
+                        initialValue: selectedJumpHostId,
+                        decoration: const InputDecoration(
+                          labelText: 'Jump host (optional)',
+                          helperText: 'Route connection via this host',
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Direct connection'),
+                          ),
+                          ...service.currentData!.hosts
+                              .where((h) => h.id != existing?.id)
+                              .map((h) => DropdownMenuItem<String?>(
+                                    value: h.id,
+                                    child: Text(h.label),
+                                  )),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() => selectedJumpHostId = value);
                         },
                       ),
                     ],
@@ -629,6 +659,7 @@ class HostsScreen extends StatelessWidget {
         port: port,
         username: userController.text.trim(),
         identityId: selectedIdentityId,
+        jumpHostId: selectedJumpHostId,
         group: effectiveGroup,
         tmuxEnabled: tmuxEnabled,
         tmuxSessionName: tmuxSession.isEmpty ? null : tmuxSession,
@@ -641,6 +672,8 @@ class HostsScreen extends StatelessWidget {
           port: port,
           username: userController.text.trim(),
           identityId: selectedIdentityId,
+          jumpHostId: selectedJumpHostId,
+          clearJumpHost: selectedJumpHostId == null,
           group: effectiveGroup,
           clearGroup: effectiveGroup == null,
           tmuxEnabled: tmuxEnabled,
