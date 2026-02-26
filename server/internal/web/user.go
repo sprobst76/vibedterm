@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/base32"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -88,7 +89,7 @@ func (u *UserWeb) authMiddleware() gin.HandlerFunc {
 
 		session := u.sessions.Get(sessionID)
 		if session == nil {
-			c.SetCookie(userSessionCookieName, "", -1, "/account", "", false, true)
+			c.SetCookie(userSessionCookieName, "", -1, "/account", "", true, true)
 			c.Redirect(http.StatusFound, "/account/login")
 			c.Abort()
 			return
@@ -220,7 +221,7 @@ func (u *UserWeb) login(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(userSessionCookieName, session.ID, int(userSessionDuration.Seconds()), "/account", "", false, true)
+	c.SetCookie(userSessionCookieName, session.ID, int(userSessionDuration.Seconds()), "/account", "", true, true)
 
 	// Update last login
 	_ = u.userRepo.UpdateLastLogin(c.Request.Context(), user.ID)
@@ -289,7 +290,7 @@ func (u *UserWeb) validateTOTP(c *gin.Context) {
 		return
 	}
 
-	if !totp.Validate(code, string(user.TOTPSecret)) {
+	if !totp.Validate(code, base32.StdEncoding.EncodeToString(user.TOTPSecret)) {
 		c.Redirect(http.StatusFound, "/account/login/totp?error=Invalid+code")
 		return
 	}
@@ -424,7 +425,7 @@ func (u *UserWeb) disableTOTP(c *gin.Context) {
 		return
 	}
 
-	if !totp.Validate(code, string(user.TOTPSecret)) {
+	if !totp.Validate(code, base32.StdEncoding.EncodeToString(user.TOTPSecret)) {
 		c.Redirect(http.StatusFound, "/account/settings/totp?error=Invalid+TOTP+code")
 		return
 	}
@@ -502,6 +503,6 @@ func (u *UserWeb) logout(c *gin.Context) {
 	if sessionID, err := c.Cookie(userSessionCookieName); err == nil {
 		u.sessions.Delete(sessionID)
 	}
-	c.SetCookie(userSessionCookieName, "", -1, "/account", "", false, true)
+	c.SetCookie(userSessionCookieName, "", -1, "/account", "", true, true)
 	c.Redirect(http.StatusFound, "/account/login")
 }

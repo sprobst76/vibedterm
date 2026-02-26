@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/base32"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -94,7 +95,7 @@ func (a *AdminWeb) authMiddleware() gin.HandlerFunc {
 		session := a.sessions.Get(sessionID)
 		if session == nil {
 			// Clear invalid cookie
-			c.SetCookie(sessionCookieName, "", -1, "/admin", "", false, true)
+			c.SetCookie(sessionCookieName, "", -1, "/admin", "", true, true)
 			c.Redirect(http.StatusFound, "/admin/login")
 			c.Abort()
 			return
@@ -179,7 +180,7 @@ func (a *AdminWeb) login(c *gin.Context) {
 	}
 
 	// Set session cookie
-	c.SetCookie(sessionCookieName, session.ID, int(sessionDuration.Seconds()), "/admin", "", false, true)
+	c.SetCookie(sessionCookieName, session.ID, int(sessionDuration.Seconds()), "/admin", "", true, true)
 
 	log.Info().Str("email", email).Bool("totp_required", user.TOTPEnabled).Msg("Admin login successful")
 
@@ -250,7 +251,7 @@ func (a *AdminWeb) validateTOTP(c *gin.Context) {
 	}
 
 	// Validate TOTP code
-	if !totp.Validate(code, string(user.TOTPSecret)) {
+	if !totp.Validate(code, base32.StdEncoding.EncodeToString(user.TOTPSecret)) {
 		log.Debug().Str("email", user.Email).Msg("Invalid TOTP code")
 		c.Redirect(http.StatusFound, "/admin/login/totp?error=Invalid+code")
 		return
@@ -501,6 +502,6 @@ func (a *AdminWeb) logout(c *gin.Context) {
 	if sessionID, err := c.Cookie(sessionCookieName); err == nil {
 		a.sessions.Delete(sessionID)
 	}
-	c.SetCookie(sessionCookieName, "", -1, "/admin", "", false, true)
+	c.SetCookie(sessionCookieName, "", -1, "/admin", "", true, true)
 	c.Redirect(http.StatusFound, "/admin/login")
 }

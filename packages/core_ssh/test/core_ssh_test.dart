@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:core_ssh/core_ssh.dart';
+import 'package:dartssh2/dartssh2.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -28,7 +29,8 @@ void main() {
         ]),
       );
 
-      await manager.connect(const SshTarget(host: 'example.com', username: 'root'));
+      await manager
+          .connect(const SshTarget(host: 'example.com', username: 'root'));
       expect(manager.status, SshConnectionStatus.connected);
 
       final result = await manager.runCommand('echo hi');
@@ -41,11 +43,13 @@ void main() {
 
     test('maps socket errors to hostUnreachable', () async {
       final manager = SshConnectionManager(
-        clientFactory: (_, __) async => throw const SocketException('no route'),
+        clientFactory: (_, __) async =>
+            throw const SocketException('no route'),
       );
 
       await expectLater(
-        manager.connect(const SshTarget(host: 'bad', username: 'root')),
+        manager
+            .connect(const SshTarget(host: 'bad', username: 'root')),
         throwsA(
           isA<SshException>().having(
             (e) => e.kind,
@@ -63,7 +67,8 @@ void main() {
         clientFactory: (_, __) async => adapter,
       );
 
-      await manager.connect(const SshTarget(host: 'example.com', username: 'root'));
+      await manager
+          .connect(const SshTarget(host: 'example.com', username: 'root'));
       final shell = await manager.startShell();
       final outputs = <String>[];
       final sub = shell.stdout.listen((data) {
@@ -79,6 +84,127 @@ void main() {
       expect(outputs, contains('hello'));
     });
   });
+
+  // ── Error classification ────────────────────────────────────────────
+
+  group('Error classification', () {
+    test('SSHAuthError maps to authFailed', () async {
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async =>
+            throw SSHAuthFailError('Authentication failed'),
+      );
+      await expectLater(
+        manager.connect(const SshTarget(host: 'h', username: 'u')),
+        throwsA(isA<SshException>().having(
+          (e) => e.kind,
+          'kind',
+          SshErrorKind.authFailed,
+        )),
+      );
+    });
+
+    test('SSHHandshakeError maps to handshakeFailed', () async {
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async =>
+            throw SSHHandshakeError('Handshake failed'),
+      );
+      await expectLater(
+        manager.connect(const SshTarget(host: 'h', username: 'u')),
+        throwsA(isA<SshException>().having(
+          (e) => e.kind,
+          'kind',
+          SshErrorKind.handshakeFailed,
+        )),
+      );
+    });
+
+    test('SSHHostkeyError maps to hostKeyRejected', () async {
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async =>
+            throw SSHHostkeyError('Host key mismatch'),
+      );
+      await expectLater(
+        manager.connect(const SshTarget(host: 'h', username: 'u')),
+        throwsA(isA<SshException>().having(
+          (e) => e.kind,
+          'kind',
+          SshErrorKind.hostKeyRejected,
+        )),
+      );
+    });
+
+    test('unknown error maps to unknown kind', () async {
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async => throw Exception('surprise'),
+      );
+      await expectLater(
+        manager.connect(const SshTarget(host: 'h', username: 'u')),
+        throwsA(isA<SshException>().having(
+          (e) => e.kind,
+          'kind',
+          SshErrorKind.unknown,
+        )),
+      );
+    });
+
+    test('SshException passes through unchanged', () async {
+      final original =
+          SshException(SshErrorKind.disconnected, 'custom');
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async => throw original,
+      );
+      await expectLater(
+        manager.connect(const SshTarget(host: 'h', username: 'u')),
+        throwsA(same(original)),
+      );
+    });
+  });
+
+  // ── Disconnected state guards ───────────────────────────────────────
+
+  group('Disconnected state guards', () {
+    test('runCommand when not connected throws disconnected', () async {
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async => _FakeAdapter(),
+      );
+      await expectLater(
+        manager.runCommand('ls'),
+        throwsA(isA<SshException>().having(
+          (e) => e.kind,
+          'kind',
+          SshErrorKind.disconnected,
+        )),
+      );
+    });
+
+    test('startShell when not connected throws disconnected', () async {
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async => _FakeAdapter(),
+      );
+      await expectLater(
+        manager.startShell(),
+        throwsA(isA<SshException>().having(
+          (e) => e.kind,
+          'kind',
+          SshErrorKind.disconnected,
+        )),
+      );
+    });
+
+    test('openSftp when not connected throws disconnected', () async {
+      final manager = SshConnectionManager(
+        clientFactory: (_, __) async => _FakeAdapter(),
+      );
+      await expectLater(
+        manager.openSftp(),
+        throwsA(isA<SshException>().having(
+          (e) => e.kind,
+          'kind',
+          SshErrorKind.disconnected,
+        )),
+      );
+    });
+  });
 }
 
 class _FakeAdapter implements SshClientAdapter {
@@ -92,13 +218,17 @@ class _FakeAdapter implements SshClientAdapter {
   }
 
   @override
-  Future<SSHForwardChannel> forwardLocal(String remoteHost, int remotePort) async {
-    throw SshException(SshErrorKind.unknown, 'Port forwarding not supported in tests');
+  Future<SSHForwardChannel> forwardLocal(
+      String remoteHost, int remotePort) async {
+    throw SshException(
+        SshErrorKind.unknown, 'Port forwarding not supported in tests');
   }
 
   @override
-  Future<SSHRemoteForward?> forwardRemote({required String host, required int port}) async {
-    throw SshException(SshErrorKind.unknown, 'Port forwarding not supported in tests');
+  Future<SSHRemoteForward?> forwardRemote(
+      {required String host, required int port}) async {
+    throw SshException(
+        SshErrorKind.unknown, 'Port forwarding not supported in tests');
   }
 
   @override
@@ -115,7 +245,8 @@ class _FakeAdapter implements SshClientAdapter {
   }
 
   @override
-  Future<SshShellSession> startShell({SshPtyConfig ptyConfig = const SshPtyConfig()}) async {
+  Future<SshShellSession> startShell(
+      {SshPtyConfig ptyConfig = const SshPtyConfig()}) async {
     return SshShellSession(
       stdout: _shellOut.stream,
       stderr: const Stream.empty(),
