@@ -594,6 +594,17 @@ class TerminalPanelState extends State<TerminalPanel>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (tab.latencyMs != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  '${tab.latencyMs}ms',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _latencyColor(tab.latencyMs!),
+                  ),
+                ),
+              ),
             if (tab.canReconnect)
               TextButton.icon(
                 onPressed: () async {
@@ -1610,4 +1621,10 @@ class TerminalPanelState extends State<TerminalPanel>
         TabConnectionStatus.error => Colors.red,
         TabConnectionStatus.disconnected => Colors.grey,
       };
+
+  Color _latencyColor(int ms) {
+    if (ms < 60) return Colors.greenAccent;
+    if (ms < 200) return Colors.amber;
+    return Colors.redAccent;
+  }
 }

@@ -5,7 +5,8 @@
 .flutter-plugins-dependencies
 .fvm/
 .idea/
-.vscode/
+.vscode/settings.json
+.vscode/c_cpp_properties.json
 build/
 apps/ssh_client_app/build/
 apps/ssh_client_app/.metadata
@@ -27,6 +28,7 @@ windows/flutter/ephemeral/
 *.log
 *.swp
 *.swo
+pubspec_overrides.yaml
 
 # OS
 .DS_Store

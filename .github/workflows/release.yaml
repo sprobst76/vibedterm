@@ -1,0 +1,102 @@
+name: Release
+
+# Trigger: git tag v1.2.3  →  GitHub Release with Windows EXE + Android APK
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  # ─── Build Android APK (Ubuntu) ─────────────────────────────────────────────
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install melos
+        run: flutter pub global activate melos
+
+      - name: Add pub cache to PATH
+        run: echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
+
+      - name: Bootstrap workspace
+        run: melos bootstrap
+
+      - name: Build APK
+        run: cd apps/ssh_client_app && flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apps/ssh_client_app/build/app/outputs/flutter-apk/app-release.apk
+
+  # ─── Build Windows EXE (Windows) ────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install melos
+        run: flutter pub global activate melos
+        shell: pwsh
+
+      - name: Add pub cache to PATH
+        run: echo "$env:USERPROFILE\.pub-cache\bin" >> $env:GITHUB_PATH
+        shell: pwsh
+
+      - name: Bootstrap workspace
+        run: melos bootstrap
+        shell: pwsh
+
+      - name: Build Windows
+        run: cd apps/ssh_client_app && flutter build windows --release
+        shell: pwsh
+
+      - name: Package Windows ZIP
+        run: |
+          Compress-Archive `
+            -Path "apps/ssh_client_app/build/windows/x64/runner/Release/*" `
+            -DestinationPath "vibedterm-windows-x64.zip"
+        shell: pwsh
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: vibedterm-windows-x64.zip
+
+  # ─── Create GitHub Release ───────────────────────────────────────────────────
+  release:
+    needs: [build-apk, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+
+      - name: Download Windows ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            app-release.apk
+            vibedterm-windows-x64.zip

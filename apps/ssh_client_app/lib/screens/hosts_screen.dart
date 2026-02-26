@@ -61,6 +61,12 @@ class HostsScreen extends StatelessWidget {
                 ),
                 if (!Platform.isAndroid && !Platform.isIOS)
                   OutlinedButton.icon(
+                    onPressed: () => _importSshConfig(context),
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Import SSH config'),
+                  ),
+                if (!Platform.isAndroid && !Platform.isIOS)
+                  OutlinedButton.icon(
                     onPressed: () => _promptTailscaleDiscover(context),
                     icon: const Icon(Icons.radar),
                     label: const Text('Discover Tailscale'),
@@ -270,6 +276,9 @@ class HostsScreen extends StatelessWidget {
   }
 
   Widget _buildHostCard(BuildContext context, VaultHost host) {
+    final sshCmd = host.port == 22
+        ? 'ssh ${host.username}@${host.hostname}'
+        : 'ssh -p ${host.port} ${host.username}@${host.hostname}';
     return Card(
       child: ListTile(
         leading: const Icon(Icons.dns_outlined),
@@ -281,6 +290,19 @@ class HostsScreen extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              tooltip: 'Copy SSH command',
+              icon: const Icon(Icons.copy, size: 18),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: sshCmd));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Copied: $sshCmd'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () => _promptAddHost(context, existing: host),
@@ -1021,6 +1043,136 @@ class HostsScreen extends StatelessWidget {
     }
     onConnectHost(host, identity);
   }
+
+  // ---------------------------------------------------------------------------
+  // SSH config import
+  // ---------------------------------------------------------------------------
+
+  Future<void> _importSshConfig(BuildContext context) async {
+    String? content;
+
+    // Try ~/.ssh/config first
+    try {
+      final home = Platform.environment['HOME'] ??
+          Platform.environment['USERPROFILE'] ??
+          '';
+      final defaultCfg = File('$home/.ssh/config');
+      if (await defaultCfg.exists()) {
+        content = await defaultCfg.readAsString();
+      }
+    } catch (_) {}
+
+    // Fall back to file picker if not found
+    if (content == null) {
+      final result = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Select SSH config file',
+        type: FileType.any,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.single.path == null) return;
+      try {
+        content = await File(result.files.single.path!).readAsString();
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not read file: $e')),
+          );
+        }
+        return;
+      }
+    }
+
+    final parsed = _parseSshConfig(content);
+    if (parsed.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hosts found in SSH config')),
+        );
+      }
+      return;
+    }
+
+    // Collect already-imported hostnames for pre-selection in the dialog
+    final existingHostnames =
+        service.currentData?.hosts.map((h) => h.hostname).toSet() ?? {};
+
+    if (!context.mounted) return;
+    final selected = await showDialog<List<_SshConfigEntry>>(
+      context: context,
+      builder: (_) => _SshConfigImportDialog(
+        hosts: parsed,
+        alreadyImported: existingHostnames,
+      ),
+    );
+
+    if (selected == null || selected.isEmpty) return;
+
+    int imported = 0;
+    for (final h in selected) {
+      try {
+        await service.addHost(
+          label: h.alias,
+          hostname: h.hostname,
+          port: h.port,
+          username: h.user,
+        );
+        imported++;
+      } catch (_) {}
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imported $imported host(s) from SSH config')),
+      );
+    }
+  }
+
+  /// Parses OpenSSH config format into a list of host entries.
+  static List<_SshConfigEntry> _parseSshConfig(String content) {
+    final hosts = <_SshConfigEntry>[];
+    String? alias;
+    String? hostname;
+    int port = 22;
+    String user = 'root';
+
+    void flush() {
+      final a = alias;
+      if (a == null) return;
+      if (a.contains('*') || a.contains('?')) return;
+      final h = hostname ?? a;
+      hosts.add(_SshConfigEntry(alias: a, hostname: h, port: port, user: user));
+    }
+
+    final defaultUser = Platform.environment['USER'] ??
+        Platform.environment['USERNAME'] ??
+        'root';
+
+    for (var line in content.split('\n')) {
+      line = line.trim();
+      if (line.isEmpty || line.startsWith('#')) continue;
+      final spaceIdx = line.indexOf(RegExp(r'\s'));
+      if (spaceIdx < 0) continue;
+      final key = line.substring(0, spaceIdx).toLowerCase();
+      final value = line.substring(spaceIdx).trim();
+
+      switch (key) {
+        case 'host':
+          flush();
+          alias = value;
+          hostname = null;
+          port = 22;
+          user = defaultUser;
+        case 'hostname':
+          hostname = value;
+        case 'port':
+          port = int.tryParse(value) ?? 22;
+        case 'user':
+          user = value;
+      }
+    }
+    flush();
+    return hosts;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -1310,6 +1462,121 @@ class _TailscaleDiscoverDialogState extends State<_TailscaleDiscoverDialog> {
                   });
                 },
           child: Text('Import ${_selected.length} node(s)'),
+        ),
+      ],
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// SSH Config Import Support
+// -----------------------------------------------------------------------------
+
+class _SshConfigEntry {
+  const _SshConfigEntry({
+    required this.alias,
+    required this.hostname,
+    this.port = 22,
+    this.user = 'root',
+  });
+
+  final String alias;
+  final String hostname;
+  final int port;
+  final String user;
+}
+
+class _SshConfigImportDialog extends StatefulWidget {
+  const _SshConfigImportDialog({
+    required this.hosts,
+    required this.alreadyImported,
+  });
+
+  final List<_SshConfigEntry> hosts;
+  final Set<String> alreadyImported;
+
+  @override
+  State<_SshConfigImportDialog> createState() => _SshConfigImportDialogState();
+}
+
+class _SshConfigImportDialogState extends State<_SshConfigImportDialog> {
+  late final Set<int> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-select all hosts that are not already imported
+    _selected = {
+      for (var i = 0; i < widget.hosts.length; i++)
+        if (!widget.alreadyImported.contains(widget.hosts[i].hostname)) i,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Import ${widget.hosts.length} host(s) from SSH config'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select hosts to import:',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    for (var i = 0; i < widget.hosts.length; i++) ...[
+                      CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: _selected.contains(i),
+                        title: Text(widget.hosts[i].alias),
+                        subtitle: Text(
+                          '${widget.hosts[i].user}@${widget.hosts[i].hostname}:${widget.hosts[i].port}',
+                        ),
+                        secondary: widget.alreadyImported
+                                .contains(widget.hosts[i].hostname)
+                            ? const Tooltip(
+                                message: 'Already in vault',
+                                child: Icon(Icons.check_circle_outline,
+                                    size: 16, color: Colors.green),
+                              )
+                            : null,
+                        onChanged: (v) => setState(() {
+                          if (v == true) {
+                            _selected.add(i);
+                          } else {
+                            _selected.remove(i);
+                          }
+                        }),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _selected.isEmpty
+              ? null
+              : () => Navigator.of(context).pop(
+                    [for (final i in _selected) widget.hosts[i]],
+                  ),
+          child: Text('Import ${_selected.length}'),
         ),
       ],
     );

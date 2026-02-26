@@ -53,6 +53,9 @@ class _ConnectionTab {
   VaultIdentity? _jumpIdentity;
   String? _jumpPassword;
 
+  /// Round-trip latency measured once after shell opens (ms).
+  int? latencyMs;
+
   String get label => attachedTmuxSession != null
       ? '${host.label} [$attachedTmuxSession]'
       : host.label;
@@ -233,6 +236,8 @@ class _ConnectionTab {
 
     _addLog('Shell opened');
     _reconnectAttempts = 0; // Reset on successful connection
+    latencyMs = null;
+    unawaited(_measureLatency());
 
     unawaited(newSession.done.whenComplete(() {
       session = null;
@@ -244,6 +249,19 @@ class _ConnectionTab {
         _attemptReconnect();
       }
     }));
+  }
+
+  /// Measures SSH round-trip latency by timing a remote `echo` call.
+  Future<void> _measureLatency() async {
+    try {
+      final sw = Stopwatch()..start();
+      await manager.runCommand('echo');
+      sw.stop();
+      latencyMs = sw.elapsedMilliseconds;
+      _onStatusChange?.call();
+    } catch (_) {
+      // Ignore — latency stays null
+    }
   }
 
   /// Attempts to reconnect with exponential backoff.
